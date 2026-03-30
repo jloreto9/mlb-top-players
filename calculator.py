@@ -57,7 +57,22 @@ RBI_ELIGIBLE_EVENTS = {
 
 def _filter_pa(df: pd.DataFrame) -> pd.DataFrame:
     """Filtra solo pitches que terminan un PA (el ultimo pitch de cada PA)."""
-    return df[df["events"].isin(PA_EVENTS)].copy()
+    pa_df = df[df["events"].isin(PA_EVENTS)].copy()
+
+    # Statcast viene pitch-by-pitch; nos quedamos con una sola fila por PA.
+    dedupe_keys = [
+        "game_pk", "at_bat_number",
+        "batter", "pitcher",
+    ]
+    available_keys = [col for col in dedupe_keys if col in pa_df.columns]
+
+    if len(available_keys) >= 2:
+        sort_cols = [col for col in ["game_pk", "at_bat_number", "pitch_number"] if col in pa_df.columns]
+        if sort_cols:
+            pa_df = pa_df.sort_values(sort_cols)
+        pa_df = pa_df.drop_duplicates(subset=available_keys, keep="last")
+
+    return pa_df
 
 
 def _ip_from_outs(outs: int) -> float:
