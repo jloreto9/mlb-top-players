@@ -26,8 +26,9 @@ PA_EVENTS = {
     "fielders_choice", "fielders_choice_out",
     "force_out", "sac_fly", "sac_fly_double_play",
     "strikeout_double_play", "sac_bunt", "sac_bunt_double_play",
-    "caught_stealing_2b", "caught_stealing_3b", "caught_stealing_home",
 }
+
+SB_EVENTS = {"stolen_base_2b", "stolen_base_3b", "stolen_base_home"}
 
 # Eventos de hit
 HIT_EVENTS = {"single", "double", "triple", "home_run"}
@@ -85,9 +86,16 @@ def _safe_round(value, digits: int):
     return round(value, digits) if pd.notna(value) else np.nan
 
 
-def _load_chadwick_register() -> pd.DataFrame:
-    """Carga el registro de Chadwick desde cache local o pybaseball."""
-    if CHADWICK_CACHE_PATH.exists():
+def _load_chadwick_register(force_refresh: bool = False) -> pd.DataFrame:
+    """Carga el registro de Chadwick desde cache local o pybaseball.
+    El cache expira diariamente para capturar debutantes."""
+    import time
+    cache_expired = (
+        not CHADWICK_CACHE_PATH.exists()
+        or force_refresh
+        or (time.time() - CHADWICK_CACHE_PATH.stat().st_mtime) > 86400
+    )
+    if not cache_expired:
         return pd.read_parquet(CHADWICK_CACHE_PATH)
 
     CHADWICK_CACHE_PATH.parent.mkdir(exist_ok=True)
@@ -98,7 +106,7 @@ def _load_chadwick_register() -> pd.DataFrame:
 
 def _player_name_lookup() -> dict[int, str]:
     """Crea un lookup MLBAM -> nombre completo desde Chadwick."""
-    register_df = _load_chadwick_register().copy()
+    register_df = _load_chadwick_register(force_refresh=False).copy()
     register_df = register_df.dropna(subset=["key_mlbam"])
     register_df["key_mlbam"] = register_df["key_mlbam"].astype(int)
     register_df["full_name"] = (
@@ -144,21 +152,10 @@ def _sum_stat(grp: pd.DataFrame, candidates: list[str], default: int = 0) -> int
 
 
 def _sum_rbi(grp: pd.DataFrame) -> int:
-    """Suma RBI por jugada, corrigiendo faltantes y asegurando piso de 1 para HR."""
-    explicit_rbi = pd.to_numeric(grp["rbi"], errors="coerce").fillna(0) if "rbi" in grp.columns else 0
+    """Suma RBI usando la columna oficial de Statcast, con piso de 1 para HR."""
+    explicit_rbi = pd.to_numeric(grp["rbi"], errors="coerce").fillna(0) if "rbi" in grp.columns else pd.Series(0, index=grp.index)
     hr_floor = grp["events"].eq("home_run").astype(int)
-
-    if {"post_bat_score", "bat_score"}.issubset(grp.columns):
-        runs_scored = (
-            pd.to_numeric(grp["post_bat_score"], errors="coerce").fillna(0)
-            - pd.to_numeric(grp["bat_score"], errors="coerce").fillna(0)
-        ).clip(lower=0)
-        derived_rbi = np.where(grp["events"].isin(RBI_ELIGIBLE_EVENTS), runs_scored, 0)
-    else:
-        derived_rbi = 0
-
     per_play_rbi = np.maximum(explicit_rbi, hr_floor)
-    per_play_rbi = np.maximum(per_play_rbi, derived_rbi)
     return int(pd.Series(per_play_rbi, index=grp.index).sum())
 
 
@@ -195,6 +192,13 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
     if pa_df.empty:
         raise ValueError("[calculator] No se encontraron plate appearances en el DataFrame.")
 
+    # Pre-calcular SB desde el df original (los robos no son PA events)
+    sb_by_batter = (
+        df[df["events"].isin(SB_EVENTS)]
+        .groupby("batter")
+        .size()
+    ) if "events" in df.columns else pd.Series(dtype=int)
+
     results = []
 
     for batter_id, grp in pa_df.groupby("batter"):
@@ -226,7 +230,7 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
         team = _derive_team(grp, role="batter")
         runs = _sum_stat(grp, ["batter_runs_scored", "runs_scored"], default=int(hr))
         rbi = _sum_rbi(grp)
-        stolen_bases = _sum_stat(grp, ["sb", "stolen_bases"])
+        stolen_bases = int(sb_by_batter.get(batter_id, 0))
 
         results.append({
             "player_id": batter_id,
