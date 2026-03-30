@@ -54,12 +54,12 @@ top_n = st.sidebar.slider("Top N jugadores por liga", min_value=5, max_value=30,
 
 min_pa = st.sidebar.number_input(
     "Mínimo PA (bateadores)",
-    min_value=0, max_value=500, value=50, step=10,
+    min_value=0, max_value=500, value=15, step=5,
     help="Plate appearances mínimos. 0 = sin filtro (cuidado con ruido estadístico)"
 )
 min_bf = st.sidebar.number_input(
     "Mínimo BF (pitchers)",
-    min_value=0, max_value=500, value=30, step=10,
+    min_value=0, max_value=500, value=15, step=5,
     help="Batters faced mínimos. 0 = sin filtro"
 )
 
@@ -105,21 +105,26 @@ if start_dt >= end_dt:
 
 BATTER_COL_CONFIG = {
     "player_name": st.column_config.TextColumn("Jugador", width="medium"),
+    "team"       : st.column_config.TextColumn("Equipo", width="small"),
     "PA"         : st.column_config.NumberColumn("PA",    format="%d"),
+    "R"          : st.column_config.NumberColumn("R",     format="%d"),
     "HR"         : st.column_config.NumberColumn("HR",    format="%d"),
-    "AVG"        : st.column_config.NumberColumn("AVG",   format="%.3f"),
-    "OBP"        : st.column_config.NumberColumn("OBP",   format="%.3f"),
-    "SLG"        : st.column_config.NumberColumn("SLG",   format="%.3f"),
+    "RBI"        : st.column_config.NumberColumn("RBI",   format="%d"),
+    "SB"         : st.column_config.NumberColumn("SB",    format="%d"),
+    "AVG"        : st.column_config.TextColumn("AVG"),
+    "OBP"        : st.column_config.TextColumn("OBP"),
+    "SLG"        : st.column_config.TextColumn("SLG"),
     "OPS"        : st.column_config.NumberColumn("OPS",   format="%.3f"),
-    "K_pct"      : st.column_config.NumberColumn("K%",    format="%.1%%"),
-    "BB_pct"     : st.column_config.NumberColumn("BB%",   format="%.1%%"),
-    "xwOBA"      : st.column_config.NumberColumn("xwOBA", format="%.3f"),
-    "xBA"        : st.column_config.NumberColumn("xBA",   format="%.3f"),
-    "xSLG"       : st.column_config.NumberColumn("xSLG",  format="%.3f"),
+    "K_pct"      : st.column_config.TextColumn("K%"),
+    "BB_pct"     : st.column_config.TextColumn("BB%"),
+    "xwOBA"      : st.column_config.TextColumn("xwOBA"),
+    "xBA"        : st.column_config.TextColumn("xBA"),
+    "xSLG"       : st.column_config.TextColumn("xSLG"),
 }
 
 PITCHER_COL_CONFIG = {
     "player_name"   : st.column_config.TextColumn("Jugador",      width="medium"),
+    "team"          : st.column_config.TextColumn("Equipo",       width="small"),
     "BF"            : st.column_config.NumberColumn("BF",          format="%d"),
     "IP"            : st.column_config.NumberColumn("IP",          format="%.1f"),
     "HR_allowed"    : st.column_config.NumberColumn("HR",          format="%d"),
@@ -129,13 +134,45 @@ PITCHER_COL_CONFIG = {
     "BB9"           : st.column_config.NumberColumn("BB/9",        format="%.2f"),
     "WHIP"          : st.column_config.NumberColumn("WHIP",        format="%.3f"),
     "ERA_proxy"     : st.column_config.NumberColumn("ERA~",        format="%.2f"),
-    "K_pct"         : st.column_config.NumberColumn("K%",          format="%.1%%"),
-    "BB_pct"        : st.column_config.NumberColumn("BB%",         format="%.1%%"),
-    "xwOBA_against" : st.column_config.NumberColumn("xwOBA contra",format="%.3f"),
+    "K_pct"         : st.column_config.TextColumn("K%"),
+    "BB_pct"        : st.column_config.TextColumn("BB%"),
+    "xwOBA_against" : st.column_config.TextColumn("xwOBA contra"),
     "xERA"          : st.column_config.NumberColumn("xERA",        format="%.2f"),
     "avg_velo"      : st.column_config.NumberColumn("Velo (mph)",  format="%.1f"),
     "avg_spin"      : st.column_config.NumberColumn("Spin (rpm)",  format="%.0f"),
 }
+
+
+def _format_slash_stat(value) -> str:
+    """Formatea slash stats como .xxx, salvo cuando son 1.xxx o mayores."""
+    if pd.isna(value):
+        return ""
+    value = float(value)
+    if value >= 1:
+        return f"{value:.3f}"
+    return f"{value:.3f}".lstrip("0")
+
+
+def _format_percentage(value) -> str:
+    """Convierte una proporcion decimal a porcentaje con dos decimales."""
+    if pd.isna(value):
+        return ""
+    return f"{float(value) * 100:.2f}%"
+
+
+def _format_display_df(df: pd.DataFrame) -> pd.DataFrame:
+    """Aplica el formato visual solicitado sin alterar los calculos originales."""
+    display_df = df.copy()
+
+    for col in ["AVG", "OBP", "SLG", "xwOBA", "xBA", "xSLG", "xwOBA_against"]:
+        if col in display_df.columns:
+            display_df[col] = display_df[col].apply(_format_slash_stat)
+
+    for col in ["K_pct", "BB_pct"]:
+        if col in display_df.columns:
+            display_df[col] = display_df[col].apply(_format_percentage)
+
+    return display_df
 
 
 def show_league_table(df: pd.DataFrame, col_config: dict, key: str) -> None:
@@ -143,8 +180,9 @@ def show_league_table(df: pd.DataFrame, col_config: dict, key: str) -> None:
     if df.empty:
         st.warning("Sin datos suficientes para este filtro.")
         return
+    display_df = _format_display_df(df)
     st.dataframe(
-        df,
+        display_df,
         use_container_width=True,
         column_config=col_config,
         hide_index=False,

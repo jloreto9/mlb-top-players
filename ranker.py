@@ -39,15 +39,15 @@ def _resolve_team(raw: str) -> str:
     return TEAM_ALIASES.get(t, t)
 
 
-def assign_league(df: pd.DataFrame, team_col: str = "league_raw") -> pd.DataFrame:
+def assign_league(df: pd.DataFrame, team_col: str = "team") -> pd.DataFrame:
     """
     Agrega columna 'league' (AL / NL / UNK) basada en el equipo local más frecuente.
 
-    Nota: league_raw viene de home_team en Statcast, que puede ser el equipo
-    local del juego, no necesariamente el del jugador. Para rangos cortos esto
-    introduce ruido; para temporada completa es muy preciso.
+    Nota: team debe venir idealmente del equipo real del jugador en la jugada.
     """
     df = df.copy()
+    if team_col not in df.columns and "league_raw" in df.columns:
+        team_col = "league_raw"
     df["team_norm"] = df[team_col].apply(_resolve_team)
     df["league"]    = df["team_norm"].map(TEAM_LEAGUE).fillna("UNK")
     return df
@@ -89,7 +89,7 @@ def top_batters(
     df = df.sort_values(sort_by, ascending=ascending)
 
     cols_display = [
-        "player_name", "league", "PA", "HR",
+        "player_name", "team", "league", "PA", "R", "HR", "RBI", "SB",
         "AVG", "OBP", "SLG", "OPS",
         "K_pct", "BB_pct",
         "xwOBA", "xBA", "xSLG",
@@ -137,7 +137,7 @@ def top_pitchers(
     df = df.sort_values(sort_by, ascending=ascending)
 
     cols_display = [
-        "player_name", "league", "BF", "IP",
+        "player_name", "team", "league", "BF", "IP",
         "HR_allowed", "BB", "K",
         "K9", "BB9", "WHIP",
         "ERA_proxy", "K_pct", "BB_pct",
