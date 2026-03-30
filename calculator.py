@@ -9,6 +9,8 @@ Métricas de pitchers   : xERA, AVG_velo, AVG_spin, K%, BB%, HR_allowed, IP
 
 import pandas as pd
 import numpy as np
+from pathlib import Path
+from pybaseball import chadwick_register
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +37,7 @@ AB_EVENTS = PA_EVENTS - {"walk", "hit_by_pitch", "sac_fly", "sac_fly_double_play
 
 # Bases por hit para SLG
 BASES = {"single": 1, "double": 2, "triple": 3, "home_run": 4}
+CHADWICK_CACHE_PATH = Path("cache") / "chadwick_register.parquet"
 
 
 # ---------------------------------------------------------------------------
@@ -56,6 +59,32 @@ def _safe_round(value, digits: int):
     return round(value, digits) if pd.notna(value) else np.nan
 
 
+def _load_chadwick_register() -> pd.DataFrame:
+    """Carga el registro de Chadwick desde cache local o pybaseball."""
+    if CHADWICK_CACHE_PATH.exists():
+        return pd.read_parquet(CHADWICK_CACHE_PATH)
+
+    CHADWICK_CACHE_PATH.parent.mkdir(exist_ok=True)
+    register_df = chadwick_register()
+    register_df.to_parquet(CHADWICK_CACHE_PATH, index=False)
+    return register_df
+
+
+def _player_name_lookup() -> dict[int, str]:
+    """Crea un lookup MLBAM -> nombre completo desde Chadwick."""
+    register_df = _load_chadwick_register().copy()
+    register_df = register_df.dropna(subset=["key_mlbam"])
+    register_df["key_mlbam"] = register_df["key_mlbam"].astype(int)
+    register_df["full_name"] = (
+        register_df["name_first"].fillna("").str.strip()
+        + " "
+        + register_df["name_last"].fillna("").str.strip()
+    ).str.strip()
+    register_df = register_df[register_df["full_name"] != ""]
+    register_df = register_df.drop_duplicates(subset=["key_mlbam"], keep="last")
+    return dict(zip(register_df["key_mlbam"], register_df["full_name"]))
+
+
 # ---------------------------------------------------------------------------
 # Métricas de BATEADORES
 # ---------------------------------------------------------------------------
@@ -75,6 +104,7 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
     """
     # Solo filas con PA terminado
     pa_df = _filter_pa(df)
+    name_lookup = _player_name_lookup()
 
     if pa_df.empty:
         raise ValueError("[calculator] No se encontraron plate appearances en el DataFrame.")
@@ -109,8 +139,7 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
                 if "estimated_slg_using_speedangle" in grp.columns else np.nan
 
         # Nombre del jugador (primera aparición no nula)
-        name = grp["player_name"].dropna().iloc[0] if "player_name" in grp.columns \
-               and not grp["player_name"].dropna().empty else str(batter_id)
+        name = name_lookup.get(int(batter_id), str(batter_id))
 
         # Liga (home_team da una pista; tomamos la moda)
         league = grp["home_team"].mode().iloc[0] if "home_team" in grp.columns else "UNK"
@@ -162,6 +191,7 @@ def calc_pitcher_metrics(df: pd.DataFrame, min_bf: int = 0) -> pd.DataFrame:
     DataFrame con una fila por pitcher y sus métricas
     """
     pa_df = _filter_pa(df)
+    name_lookup = _player_name_lookup()
 
     if pa_df.empty:
         raise ValueError("[calculator] No se encontraron plate appearances en el DataFrame.")
@@ -223,8 +253,7 @@ def calc_pitcher_metrics(df: pd.DataFrame, min_bf: int = 0) -> pd.DataFrame:
         avg_spin  = pitcher_all["release_spin_rate"].mean() \
                     if "release_spin_rate" in pitcher_all.columns else np.nan
 
-        name = grp["player_name"].dropna().iloc[0] if "player_name" in grp.columns \
-               and not grp["player_name"].dropna().empty else str(pitcher_id)
+        name = name_lookup.get(int(pitcher_id), str(pitcher_id))
 
         league = grp["home_team"].mode().iloc[0] if "home_team" in grp.columns else "UNK"
 
