@@ -41,6 +41,14 @@ AB_EVENTS = PA_EVENTS - {
 # Bases por hit para SLG
 BASES = {"single": 1, "double": 2, "triple": 3, "home_run": 4}
 CHADWICK_CACHE_PATH = Path("cache") / "chadwick_register.parquet"
+RBI_ELIGIBLE_EVENTS = {
+    "single", "double", "triple", "home_run",
+    "walk", "hit_by_pitch",
+    "fielders_choice", "fielders_choice_out",
+    "force_out", "sac_fly", "sac_fly_double_play",
+    "sac_bunt", "sac_bunt_double_play",
+    "grounded_into_double_play", "double_play", "triple_play",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -121,13 +129,36 @@ def _sum_stat(grp: pd.DataFrame, candidates: list[str], default: int = 0) -> int
 
 
 def _sum_rbi(grp: pd.DataFrame) -> int:
-    """Suma RBI garantizando que cada HR cuente al menos una impulsada."""
-    if "rbi" in grp.columns:
-        rbi_series = pd.to_numeric(grp["rbi"], errors="coerce").fillna(0)
-        hr_floor = grp["events"].eq("home_run").astype(int)
-        return int(np.maximum(rbi_series, hr_floor).sum())
+    """Suma RBI por jugada, corrigiendo faltantes y asegurando piso de 1 para HR."""
+    explicit_rbi = pd.to_numeric(grp["rbi"], errors="coerce").fillna(0) if "rbi" in grp.columns else 0
+    hr_floor = grp["events"].eq("home_run").astype(int)
 
-    return int(grp["events"].eq("home_run").sum())
+    if {"post_bat_score", "bat_score"}.issubset(grp.columns):
+        runs_scored = (
+            pd.to_numeric(grp["post_bat_score"], errors="coerce").fillna(0)
+            - pd.to_numeric(grp["bat_score"], errors="coerce").fillna(0)
+        ).clip(lower=0)
+        derived_rbi = np.where(grp["events"].isin(RBI_ELIGIBLE_EVENTS), runs_scored, 0)
+    else:
+        derived_rbi = 0
+
+    per_play_rbi = np.maximum(explicit_rbi, hr_floor)
+    per_play_rbi = np.maximum(per_play_rbi, derived_rbi)
+    return int(pd.Series(per_play_rbi, index=grp.index).sum())
+
+
+def _resolve_player_name(grp: pd.DataFrame, player_id: int, role: str, lookup: dict[int, str]) -> str:
+    """Resuelve nombre usando columnas del feed cuando existan y Chadwick como fallback."""
+    preferred_cols = ["batter_name"] if role == "batter" else ["pitcher_name", "player_name"]
+
+    for col in preferred_cols:
+        if col in grp.columns:
+            candidates = grp[col].dropna().astype(str).str.strip()
+            candidates = candidates[candidates != ""]
+            if not candidates.empty:
+                return candidates.mode().iloc[0]
+
+    return lookup.get(int(player_id), str(player_id))
 
 
 # ---------------------------------------------------------------------------
@@ -176,7 +207,7 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
         xslg = grp["estimated_slg_using_speedangle"].mean() \
             if "estimated_slg_using_speedangle" in grp.columns else np.nan
 
-        name = name_lookup.get(int(batter_id), str(batter_id))
+        name = _resolve_player_name(grp, batter_id, role="batter", lookup=name_lookup)
         team = _derive_team(grp, role="batter")
         runs = _sum_stat(grp, ["batter_runs_scored", "runs_scored"], default=int(hr))
         rbi = _sum_rbi(grp)
@@ -273,7 +304,7 @@ def calc_pitcher_metrics(df: pd.DataFrame, min_bf: int = 0) -> pd.DataFrame:
         avg_velo = pitcher_all["release_speed"].mean() if "release_speed" in pitcher_all.columns else np.nan
         avg_spin = pitcher_all["release_spin_rate"].mean() if "release_spin_rate" in pitcher_all.columns else np.nan
 
-        name = name_lookup.get(int(pitcher_id), str(pitcher_id))
+        name = _resolve_player_name(grp, pitcher_id, role="pitcher", lookup=name_lookup)
         team = _derive_team(grp, role="pitcher")
 
         results.append({
