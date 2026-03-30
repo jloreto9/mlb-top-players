@@ -120,6 +120,16 @@ def _sum_stat(grp: pd.DataFrame, candidates: list[str], default: int = 0) -> int
     return default
 
 
+def _sum_rbi(grp: pd.DataFrame) -> int:
+    """Suma RBI garantizando que cada HR cuente al menos una impulsada."""
+    if "rbi" in grp.columns:
+        rbi_series = pd.to_numeric(grp["rbi"], errors="coerce").fillna(0)
+        hr_floor = grp["events"].eq("home_run").astype(int)
+        return int(np.maximum(rbi_series, hr_floor).sum())
+
+    return int(grp["events"].eq("home_run").sum())
+
+
 # ---------------------------------------------------------------------------
 # Metricas de BATEADORES
 # ---------------------------------------------------------------------------
@@ -169,7 +179,7 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
         name = name_lookup.get(int(batter_id), str(batter_id))
         team = _derive_team(grp, role="batter")
         runs = _sum_stat(grp, ["batter_runs_scored", "runs_scored"], default=int(hr))
-        rbi = _sum_stat(grp, ["rbi"])
+        rbi = _sum_rbi(grp)
         stolen_bases = _sum_stat(grp, ["sb", "stolen_bases"])
 
         results.append({
