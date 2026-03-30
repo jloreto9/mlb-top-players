@@ -30,19 +30,21 @@ st.sidebar.divider()
 
 st.sidebar.subheader("📅 Rango de fechas")
 col1, col2 = st.sidebar.columns(2)
+default_end_dt = date.today()
+default_start_dt = default_end_dt - timedelta(days=7)
 with col1:
     start_dt = st.date_input(
         "Inicio",
-        value=date(2024, 4, 1),
+        value=default_start_dt,
         min_value=date(2015, 1, 1),
-        max_value=date.today() - timedelta(days=1),
+        max_value=date.today(),
     )
 with col2:
     end_dt = st.date_input(
         "Fin",
-        value=date(2024, 6, 30),
+        value=default_end_dt,
         min_value=date(2015, 1, 2),
-        max_value=date.today() - timedelta(days=1),
+        max_value=date.today(),
     )
 
 st.sidebar.divider()

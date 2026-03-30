@@ -51,6 +51,11 @@ def _ip_from_outs(outs: int) -> float:
     return outs / 3
 
 
+def _safe_round(value, digits: int):
+    """Redondea solo cuando el valor no es NaN/NA."""
+    return round(value, digits) if pd.notna(value) else np.nan
+
+
 # ---------------------------------------------------------------------------
 # Métricas de BATEADORES
 # ---------------------------------------------------------------------------
@@ -91,7 +96,7 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
         avg  = hits / ab if ab > 0 else np.nan
         obp  = (hits + bb + hbp) / pa if pa > 0 else np.nan
         slg  = total_bases / ab if ab > 0 else np.nan
-        ops  = obp + slg if (not np.isnan(obp) and not np.isnan(slg)) else np.nan
+        ops  = obp + slg if pd.notna(obp) and pd.notna(slg) else np.nan
         k_pct = k / pa if pa > 0 else np.nan
         bb_pct = bb / pa if pa > 0 else np.nan
 
@@ -120,15 +125,15 @@ def calc_batter_metrics(df: pd.DataFrame, min_pa: int = 0) -> pd.DataFrame:
             "HR"        : int(hr),
             "BB"        : int(bb),
             "K"         : int(k),
-            "AVG"       : round(avg, 3)   if not np.isnan(avg)  else np.nan,
-            "OBP"       : round(obp, 3)   if not np.isnan(obp)  else np.nan,
-            "SLG"       : round(slg, 3)   if not np.isnan(slg)  else np.nan,
-            "OPS"       : round(ops, 3)   if not np.isnan(ops)  else np.nan,
-            "K_pct"     : round(k_pct, 3) if not np.isnan(k_pct) else np.nan,
-            "BB_pct"    : round(bb_pct, 3) if not np.isnan(bb_pct) else np.nan,
-            "xwOBA"     : round(xwoba, 3) if not np.isnan(xwoba) else np.nan,
-            "xBA"       : round(xba, 3)   if not np.isnan(xba)  else np.nan,
-            "xSLG"      : round(xslg, 3)  if not np.isnan(xslg) else np.nan,
+            "AVG"       : _safe_round(avg, 3),
+            "OBP"       : _safe_round(obp, 3),
+            "SLG"       : _safe_round(slg, 3),
+            "OPS"       : _safe_round(ops, 3),
+            "K_pct"     : _safe_round(k_pct, 3),
+            "BB_pct"    : _safe_round(bb_pct, 3),
+            "xwOBA"     : _safe_round(xwoba, 3),
+            "xBA"       : _safe_round(xba, 3),
+            "xSLG"      : _safe_round(xslg, 3),
         })
 
     out = pd.DataFrame(results)
@@ -190,7 +195,7 @@ def calc_pitcher_metrics(df: pd.DataFrame, min_bf: int = 0) -> pd.DataFrame:
         else:
             runs_allowed = np.nan
 
-        era = (runs_allowed * 9 / ip) if (ip > 0 and not np.isnan(runs_allowed)) else np.nan
+        era = (runs_allowed * 9 / ip) if ip > 0 and pd.notna(runs_allowed) else np.nan
 
         k9  = (k * 9 / ip) if ip > 0 else np.nan
         bb9 = (bb * 9 / ip) if ip > 0 else np.nan
@@ -206,7 +211,7 @@ def calc_pitcher_metrics(df: pd.DataFrame, min_bf: int = 0) -> pd.DataFrame:
             xwoba_against = grp["estimated_woba_using_speedangle"].mean()
             # Fórmula aproximada usada por Baseball Savant
             xera = max(0, (xwoba_against - 0.100) / 0.140 * 9) \
-                   if not np.isnan(xwoba_against) else np.nan
+                   if pd.notna(xwoba_against) else np.nan
         else:
             xwoba_against = np.nan
             xera = np.nan
@@ -233,16 +238,16 @@ def calc_pitcher_metrics(df: pd.DataFrame, min_bf: int = 0) -> pd.DataFrame:
             "HR_allowed"  : int(hr),
             "BB"          : int(bb),
             "K"           : int(k),
-            "K9"          : round(k9, 2)   if not np.isnan(k9)   else np.nan,
-            "BB9"         : round(bb9, 2)  if not np.isnan(bb9)  else np.nan,
-            "WHIP"        : round(whip, 3) if not np.isnan(whip) else np.nan,
-            "ERA_proxy"   : round(era, 2)  if not np.isnan(era)  else np.nan,
-            "K_pct"       : round(k_pct, 3)  if not np.isnan(k_pct)  else np.nan,
-            "BB_pct"      : round(bb_pct, 3) if not np.isnan(bb_pct) else np.nan,
-            "xwOBA_against": round(xwoba_against, 3) if not np.isnan(xwoba_against) else np.nan,
-            "xERA"        : round(xera, 2) if not np.isnan(xera) else np.nan,
-            "avg_velo"    : round(avg_velo, 1) if not np.isnan(avg_velo) else np.nan,
-            "avg_spin"    : round(avg_spin, 0) if not np.isnan(avg_spin) else np.nan,
+            "K9"          : _safe_round(k9, 2),
+            "BB9"         : _safe_round(bb9, 2),
+            "WHIP"        : _safe_round(whip, 3),
+            "ERA_proxy"   : _safe_round(era, 2),
+            "K_pct"       : _safe_round(k_pct, 3),
+            "BB_pct"      : _safe_round(bb_pct, 3),
+            "xwOBA_against": _safe_round(xwoba_against, 3),
+            "xERA"        : _safe_round(xera, 2),
+            "avg_velo"    : _safe_round(avg_velo, 1),
+            "avg_spin"    : _safe_round(avg_spin, 0),
         })
 
     out = pd.DataFrame(results)
