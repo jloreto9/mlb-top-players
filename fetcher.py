@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching
+from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, standings
 from pybaseball import cache as pybb_cache
 
 pybb_cache.enable()
@@ -95,3 +95,28 @@ def team_pit(year: int, force: bool = False) -> pd.DataFrame:
         lambda: team_pitching(year),
         year, force,
     )
+
+
+def get_standings(year: int, force: bool = False) -> list[pd.DataFrame]:
+    """
+    Standings por división desde Baseball Reference.
+    Retorna lista de 6 DataFrames en orden:
+    AL East, AL Central, AL West, NL East, NL Central, NL West
+    """
+    import pickle
+    cache_file = CACHE_DIR / f"standings_{year}.pkl"
+    ttl = 1.0 if year >= _NOW_YEAR else 24.0 * 365  # standings: cache 1h en temporada activa
+
+    if not force and cache_file.exists():
+        age = time.time() - cache_file.stat().st_mtime
+        if age < ttl * 3600:
+            with open(cache_file, "rb") as f:
+                return pickle.load(f)
+
+    print(f"[fetcher] descargando standings {year} desde Baseball Reference...")
+    tables = standings(year)
+
+    with open(cache_file, "wb") as f:
+        pickle.dump(tables, f)
+
+    return tables

@@ -11,6 +11,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
+from datetime import datetime
+
 import fetcher
 from constants import TEAM_LEAGUE, TBAT_COLS, TPIT_COLS, LOWER_IS_BETTER
 from utils import format_display, put_league_after_team
@@ -64,7 +66,14 @@ yr  = st.session_state.loaded_year
 tbd = st.session_state.team_bat_df.copy()
 tpd = st.session_state.team_pit_df.copy()
 
-st.caption(f"Temporada **{yr}** · Fuente: FanGraphs")
+if yr >= datetime.now().year:
+    st.warning(
+        f"⚠️ Los datos de **{yr}** son parciales — la temporada está en curso. "
+        "FanGraphs puede devolver datos del año anterior si aún hay poca data. "
+        "Selecciona **2025** para ver una temporada completa."
+    )
+else:
+    st.caption(f"Temporada **{yr}** · Fuente: FanGraphs")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────

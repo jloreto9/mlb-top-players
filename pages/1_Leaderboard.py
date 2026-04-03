@@ -9,6 +9,7 @@ Tabs: Bateadores | Pitchers
 
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # Asegurar que el root del proyecto este en el path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -69,7 +70,14 @@ yr      = st.session_state.lb_year
 bat_raw = st.session_state.lb_bat.copy()
 pit_raw = st.session_state.lb_pit.copy()
 
-st.caption(f"Temporada **{yr}** · Fuente: FanGraphs")
+if yr >= datetime.now().year:
+    st.warning(
+        f"⚠️ Los datos de **{yr}** son parciales — la temporada está en curso. "
+        "FanGraphs puede devolver datos del año anterior si aún hay poca data. "
+        "Selecciona **2025** para ver una temporada completa."
+    )
+else:
+    st.caption(f"Temporada **{yr}** · Fuente: FanGraphs")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
