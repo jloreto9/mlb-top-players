@@ -18,6 +18,7 @@ import pandas as pd
 
 import fetcher
 from constants import TEAM_LEAGUE, BAT_COLS, PIT_COLS, LOWER_IS_BETTER
+from utils import format_display, put_league_after_team
 
 # ── Config ─────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -209,10 +210,11 @@ def _show_leaderboard(
         .sort_values(sort_col, ascending=ascending)
         .reset_index(drop=True)
     )
+    sorted_df = put_league_after_team(sorted_df)
     sorted_df.index += 1
 
     st.dataframe(
-        sorted_df,
+        format_display(sorted_df),
         use_container_width=True,
         hide_index=False,
         height=600,

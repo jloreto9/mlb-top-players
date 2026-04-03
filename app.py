@@ -13,6 +13,7 @@ import plotly.express as px
 
 import fetcher
 from constants import TEAM_LEAGUE, TBAT_COLS, TPIT_COLS, LOWER_IS_BETTER
+from utils import format_display, put_league_after_team
 
 # ── Configuración ──────────────────────────────────────────────────────────
 st.set_page_config(
@@ -86,14 +87,13 @@ def _show_table_and_chart(
     cols: list[str],
     prefix: str,
 ) -> None:
-    """Muestra selector de métrica, tabla ordenada y gráfico de barras."""
+    """Muestra selector de métrica, tabla formateada y gráfico horizontal."""
     avail = _avail(df, cols)
     if df.empty or len(avail) < 2:
         st.warning("Sin datos suficientes.")
         return
 
     sort_options = [c for c in avail if c not in ("Team", "League")]
-    default_sort = sort_options[0] if sort_options else avail[0]
 
     c1, c2 = st.columns([3, 1])
     with c1:
@@ -109,36 +109,48 @@ def _show_table_and_chart(
             "↑ Asc",
             value=asc_default,
             key=f"asc_{prefix}",
-            help="Menor primero (útil para ERA, FIP, etc.)",
+            help="Menor primero (ERA, FIP, etc.)",
         )
 
+    # Ordenar con datos numéricos, luego aplicar formato visual
     display_cols = _avail(df, avail)
     sorted_df = (
         df[display_cols]
         .sort_values(sort_col, ascending=ascending)
         .reset_index(drop=True)
     )
+    sorted_df = put_league_after_team(sorted_df)
     sorted_df.index += 1
 
-    st.dataframe(sorted_df, use_container_width=True, hide_index=False)
+    # Tabla: formatear para display (no afecta al chart)
+    st.dataframe(format_display(sorted_df), use_container_width=True, hide_index=False)
 
-    # ── Gráfico de barras ──────────────────────────────────────────────────
-    chart_df = sorted_df.reset_index(names="Rank")
+    # ── Gráfico de barras HORIZONTAL — un bar por equipo ──────────────────
+    # Invertir orden para que el mejor quede arriba en barras horizontales
+    chart_df = sorted_df[["Team", sort_col]].copy().sort_values(
+        sort_col, ascending=not ascending
+    )
+    color_scale = "RdYlGn_r" if sort_col in LOWER_IS_BETTER else "RdYlGn"
+
     fig = px.bar(
         chart_df,
-        x="Team",
-        y=sort_col,
-        color="Team",
+        y="Team",
+        x=sort_col,
+        orientation="h",
+        color=sort_col,
+        color_continuous_scale=color_scale,
         text=sort_col,
         title=f"{sort_col} por equipo — {yr}",
-        height=380,
+        height=max(500, len(chart_df) * 22),
     )
-    fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+    fig.update_traces(texttemplate="%{x:.3f}", textposition="outside")
     fig.update_layout(
         showlegend=False,
-        xaxis_title="",
-        yaxis_title=sort_col,
-        margin=dict(t=50, b=10),
+        coloraxis_showscale=False,
+        yaxis_title="",
+        xaxis_title=sort_col,
+        yaxis={"categoryorder": "total ascending" if not ascending else "total descending"},
+        margin=dict(t=50, r=80, b=30, l=10),
     )
     st.plotly_chart(fig, use_container_width=True)
 
