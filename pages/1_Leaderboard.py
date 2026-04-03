@@ -133,11 +133,13 @@ def _show_leaderboard(
 
     with fc2:
         if min_col and min_col in df.columns:
+            col_max = int(pd.to_numeric(df[min_col], errors="coerce").max() or 700)
+            safe_default = min(min_default, col_max)
             min_val = st.number_input(
                 min_label,
                 min_value=0,
-                max_value=int(df[min_col].max()) if not df[min_col].empty else 700,
-                value=min_default,
+                max_value=col_max,
+                value=safe_default,
                 step=10,
                 key=f"min_{prefix}",
             )
