@@ -51,7 +51,8 @@ def _fmt_slash(v) -> str:
 def _fmt_pct(v) -> str:
     if pd.isna(v):
         return ""
-    return f"{float(v):.2f}%"
+    # FanGraphs devuelve fracciones (0.225 = 22.5%) → multiplicar ×100
+    return f"{float(v) * 100:.2f}%"
 
 
 def _fmt_int(v) -> str:
