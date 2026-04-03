@@ -1,0 +1,61 @@
+name: Refresh FanGraphs Cache
+
+on:
+  schedule:
+    # Todos los dias a las 12:00 UTC (8 AM ET) — FanGraphs actualiza de madrugada
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'Temporada a refrescar (dejar vacio = automatico)'
+        required: false
+        default: ''
+
+jobs:
+  refresh:
+    name: Pull FanGraphs stats and commit cache
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # Necesario para hacer push del cache
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Refresh FanGraphs cache
+        run: |
+          if [ -n "${{ github.event.inputs.year }}" ]; then
+            python scripts/refresh_cache.py --year ${{ github.event.inputs.year }}
+          else
+            python scripts/refresh_cache.py
+          fi
+
+      - name: Commit updated cache files
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Solo stagear los parquets de FanGraphs (bat, pit, tbat, tpit)
+          git add cache/bat_*.parquet   2>/dev/null || true
+          git add cache/pit_*.parquet   2>/dev/null || true
+          git add cache/tbat_*.parquet  2>/dev/null || true
+          git add cache/tpit_*.parquet  2>/dev/null || true
+
+          # Commit solo si hay cambios
+          if git diff --staged --quiet; then
+            echo "No hay cambios en el cache. Nada que commitear."
+          else
+            DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
+            git commit -m "chore: refresh FanGraphs cache [$DATE]"
+            git push
+            echo "Cache actualizado y pusheado."
+          fi

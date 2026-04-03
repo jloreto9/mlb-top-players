@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+
+# pybaseball internal cache (en home del usuario)
+.pybaseball/
+
+# Cache de pybaseball (carpeta local que pybaseball crea automaticamente)
+cache/.pybaseball/
+
+# Los parquets de FanGraphs SI se committean (datos frescos en el repo)
+# cache/*.parquet  ← NO ignorar
+
+# Chadwick register cache (se regenera automaticamente)
+cache/chadwick_register.parquet
+
+# Statcast cache antiguo (ya no se usa)
+cache/statcast_*.parquet

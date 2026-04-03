@@ -1,63 +1,97 @@
 """
 fetcher.py
 ----------
-Descarga datos pitch-by-pitch de Statcast via pybaseball.
-Incluye caché local en Parquet para no re-descargar en cada ejecución.
+Descarga estadísticas desde FanGraphs via pybaseball.
+Caché local Parquet:  6 h para temporada en curso, 1 año para pasadas.
+
+Funciones públicas:
+    batting(year)       → leaderboard individual bateadores
+    pitching(year)      → leaderboard individual pitchers
+    team_bat(year)      → stats colectivas bateo por equipo
+    team_pit(year)      → stats colectivas pitcheo por equipo
 """
 
-import os
-import pandas as pd
-from pathlib import Path
-from pybaseball import statcast
-from pybaseball import cache
+from __future__ import annotations
 
-# Activar caché interno de pybaseball (evita rate limits)
-cache.enable()
+import time
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching
+from pybaseball import cache as pybb_cache
+
+pybb_cache.enable()
 
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
-
-def _cache_path(start_dt: str, end_dt: str) -> Path:
-    """Genera nombre de archivo de caché basado en el rango de fechas."""
-    return CACHE_DIR / f"statcast_{start_dt}_{end_dt}.parquet"
+_NOW_YEAR: int = datetime.now().year
 
 
-def fetch_statcast(start_dt: str, end_dt: str, force_refresh: bool = False) -> pd.DataFrame:
-    """
-    Descarga datos de Statcast para el rango de fechas dado.
-    Si existe caché local, lo usa (a menos que force_refresh=True).
+# ── Helpers de caché ───────────────────────────────────────────────────────
 
-    Parámetros
-    ----------
-    start_dt      : str  — Fecha inicio 'YYYY-MM-DD'
-    end_dt        : str  — Fecha fin    'YYYY-MM-DD'
-    force_refresh : bool — Si True, ignora caché y re-descarga
+def _path(key: str) -> Path:
+    return CACHE_DIR / f"{key}.parquet"
 
-    Retorna
-    -------
-    pd.DataFrame con todos los pitches del período
-    """
-    cache_file = _cache_path(start_dt, end_dt)
 
-    if cache_file.exists() and not force_refresh:
-        print(f"[fetcher] Cargando desde caché: {cache_file}")
-        return pd.read_parquet(cache_file)
+def _expired(path: Path, max_hours: float) -> bool:
+    if not path.exists():
+        return True
+    return (time.time() - path.stat().st_mtime) > max_hours * 3600
 
-    print(f"[fetcher] Descargando Statcast {start_dt} → {end_dt} (puede tardar)...")
-    df = statcast(start_dt=start_dt, end_dt=end_dt)
+
+def _load(key: str, fetch_fn, year: int, force: bool) -> pd.DataFrame:
+    path = _path(key)
+    ttl = 6.0 if year >= _NOW_YEAR else 24.0 * 365  # año actual: 6h · pasados: 1 año
+    if not force and not _expired(path, ttl):
+        print(f"[fetcher] caché → {path.name}")
+        return pd.read_parquet(path)
+
+    print(f"[fetcher] descargando {key} desde FanGraphs...")
+    df = fetch_fn()
 
     if df is None or df.empty:
-        raise ValueError(f"Statcast no retornó datos para el rango {start_dt} → {end_dt}")
+        raise ValueError(f"FanGraphs no retornó datos para {key}")
 
-    # Guardar caché
-    df.to_parquet(cache_file, index=False)
-    print(f"[fetcher] Datos guardados en caché: {cache_file} ({len(df):,} pitches)")
-
+    df.to_parquet(path, index=False)
+    print(f"[fetcher] guardado {path.name} ({len(df):,} filas)")
     return df
 
 
-def get_column_inventory(df: pd.DataFrame) -> None:
-    """Imprime columnas disponibles — útil para debugging."""
-    print(f"\n[fetcher] Total columnas: {len(df.columns)}")
-    print(df.dtypes.to_string())
+# ── API pública ────────────────────────────────────────────────────────────
+
+def batting(year: int, force: bool = False) -> pd.DataFrame:
+    """Leaderboard individual de bateadores (temporada completa, sin filtro de PA)."""
+    return _load(
+        f"bat_{year}",
+        lambda: batting_stats(year, qual=1, ind=1),
+        year, force,
+    )
+
+
+def pitching(year: int, force: bool = False) -> pd.DataFrame:
+    """Leaderboard individual de pitchers (temporada completa, sin filtro de IP)."""
+    return _load(
+        f"pit_{year}",
+        lambda: pitching_stats(year, qual=1, ind=1),
+        year, force,
+    )
+
+
+def team_bat(year: int, force: bool = False) -> pd.DataFrame:
+    """Stats colectivas de bateo por equipo."""
+    return _load(
+        f"tbat_{year}",
+        lambda: team_batting(year),
+        year, force,
+    )
+
+
+def team_pit(year: int, force: bool = False) -> pd.DataFrame:
+    """Stats colectivas de pitcheo por equipo."""
+    return _load(
+        f"tpit_{year}",
+        lambda: team_pitching(year),
+        year, force,
+    )
