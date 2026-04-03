@@ -3,14 +3,15 @@ constants.py
 ------------
 Mapeo equipo → liga y columnas de display.
 Todos los nombres de columna corresponden exactamente a lo que
-retorna pybaseball desde FanGraphs (batting_stats / pitching_stats /
-team_batting / team_pitching).
+retorna pybaseball desde FanGraphs (team_batting / team_pitching / team_fielding).
 
 Notas de nomenclatura FanGraphs:
   wRC+   → mayor es mejor  (100 = promedio liga)
   ERA-   → menor es mejor  (100 = promedio liga)  ← FG usa "-" no "+"
   FIP-   → menor es mejor
   xFIP-  → menor es mejor
+  Def    → mayor es mejor  (runs defensivos sobre promedio)
+  UZR    → mayor es mejor  (ultimate zone rating)
 """
 
 # ── Equipo → Liga ──────────────────────────────────────────────────────────
@@ -70,8 +71,16 @@ TPIT_COLS = [
     "BABIP", "LOB%", "HR/9", "WAR",
 ]
 
+# ── Colectivas — Fildeo por equipo ────────────────────────────────────────
+# Columnas exactas de pybaseball.team_fielding()
+TFIELD_COLS = [
+    "Team", "G", "Inn", "PO", "A", "E", "DP",
+    "FP%", "DRS", "OAA", "UZR", "UZR/150", "Def", "WAR",
+]
+
 # ── Métricas donde MENOR = mejor ──────────────────────────────────────────
 LOWER_IS_BETTER = {
     "ERA", "ERA-", "FIP", "FIP-", "xFIP", "xFIP-",
     "WHIP", "BB/9", "HR/9", "BB%", "BABIP",
+    "E",    # errores: menos es mejor
 }

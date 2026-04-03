@@ -14,7 +14,7 @@ import plotly.express as px
 from datetime import datetime
 
 import fetcher
-from constants import TEAM_LEAGUE, TBAT_COLS, TPIT_COLS, LOWER_IS_BETTER
+from constants import TEAM_LEAGUE, TBAT_COLS, TPIT_COLS, TFIELD_COLS, LOWER_IS_BETTER
 from utils import format_display, put_league_after_team
 
 # ── Configuración ──────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ with st.sidebar:
     run_btn = st.button("▶ Cargar datos", type="primary", use_container_width=True)
 
 # ── Session state ──────────────────────────────────────────────────────────
-for key in ("team_bat_df", "team_pit_df", "loaded_year"):
+for key in ("team_bat_df", "team_pit_df", "team_field_df", "loaded_year"):
     if key not in st.session_state:
         st.session_state[key] = None
 
@@ -48,9 +48,10 @@ for key in ("team_bat_df", "team_pit_df", "loaded_year"):
 if run_btn:
     with st.spinner(f"Descargando stats de equipo {year}..."):
         try:
-            st.session_state.team_bat_df = fetcher.team_bat(year, force=force)
-            st.session_state.team_pit_df = fetcher.team_pit(year, force=force)
-            st.session_state.loaded_year = year
+            st.session_state.team_bat_df   = fetcher.team_bat(year, force=force)
+            st.session_state.team_pit_df   = fetcher.team_pit(year, force=force)
+            st.session_state.team_field_df = fetcher.team_field(year, force=force)
+            st.session_state.loaded_year   = year
         except Exception as e:
             st.error(f"❌ {e}")
             st.stop()
@@ -65,6 +66,7 @@ if st.session_state.team_bat_df is None:
 yr  = st.session_state.loaded_year
 tbd = st.session_state.team_bat_df.copy()
 tpd = st.session_state.team_pit_df.copy()
+tfd = st.session_state.team_field_df.copy() if st.session_state.team_field_df is not None else pd.DataFrame()
 
 if yr >= datetime.now().year:
     st.warning(
@@ -183,13 +185,19 @@ def _show_by_league(
 # ── Enriquecer con liga ────────────────────────────────────────────────────
 tbd = _add_league(tbd)
 tpd = _add_league(tpd)
+if not tfd.empty:
+    tfd = _add_league(tfd)
 
-# Agregar League al final de las listas de cols para que aparezca en tabla
-tbat_cols = TBAT_COLS + ["League"]
-tpit_cols = TPIT_COLS + ["League"]
+tbat_cols   = TBAT_COLS   + ["League"]
+tpit_cols   = TPIT_COLS   + ["League"]
+tfield_cols = TFIELD_COLS + ["League"]
 
 # ── Tabs principales ───────────────────────────────────────────────────────
-bat_tab, pit_tab = st.tabs(["🏏 Bateo Colectivo", "⚡ Pitcheo Colectivo"])
+bat_tab, pit_tab, field_tab = st.tabs([
+    "🏏 Bateo Colectivo",
+    "⚡ Pitcheo Colectivo",
+    "🧤 Fildeo Colectivo",
+])
 
 with bat_tab:
     st.subheader(f"Bateo Colectivo por Equipo — {yr}")
@@ -198,3 +206,10 @@ with bat_tab:
 with pit_tab:
     st.subheader(f"Pitcheo Colectivo por Equipo — {yr}")
     _show_by_league(tpd, tpit_cols, "tpit")
+
+with field_tab:
+    st.subheader(f"Fildeo Colectivo por Equipo — {yr}")
+    if tfd.empty:
+        st.warning("No se pudieron cargar los datos de fildeo.")
+    else:
+        _show_by_league(tfd, tfield_cols, "tfield")

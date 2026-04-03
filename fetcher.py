@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, standings
+from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, team_fielding, standings
 from pybaseball import cache as pybb_cache
 
 pybb_cache.enable()
@@ -93,6 +93,15 @@ def team_pit(year: int, force: bool = False) -> pd.DataFrame:
     return _load(
         f"tpit_{year}",
         lambda: team_pitching(year),
+        year, force,
+    )
+
+
+def team_field(year: int, force: bool = False) -> pd.DataFrame:
+    """Stats colectivas de fildeo por equipo (una fila por equipo)."""
+    return _load(
+        f"tfield_{year}",
+        lambda: team_fielding(year),
         year, force,
     )
 
