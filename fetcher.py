@@ -18,6 +18,25 @@ from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
+import requests
+
+# FanGraphs devuelve 403 si no hay User-Agent de navegador.
+# Patcheamos requests.get antes de importar pybaseball para que
+# todas sus requests incluyan el header necesario.
+_real_requests_get = requests.get
+
+def _requests_get_with_ua(url, **kwargs):
+    headers = kwargs.pop("headers", {}) or {}
+    headers.setdefault(
+        "User-Agent",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36",
+    )
+    return _real_requests_get(url, headers=headers, **kwargs)
+
+requests.get = _requests_get_with_ua
+
 from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, team_fielding, standings
 from pybaseball import cache as pybb_cache
 
