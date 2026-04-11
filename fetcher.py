@@ -21,21 +21,23 @@ import pandas as pd
 import requests
 
 # FanGraphs devuelve 403 si no hay User-Agent de navegador.
-# Patcheamos requests.get antes de importar pybaseball para que
-# todas sus requests incluyan el header necesario.
-_real_requests_get = requests.get
+# Patcheamos Session.request (no requests.get) porque pybaseball usa
+# requests.Session internamente — las sessions tienen su propio .get/.request
+# que no pasa por requests.get, así que ese parche no alcanza.
+_real_session_request = requests.Session.request
 
-def _requests_get_with_ua(url, **kwargs):
-    headers = kwargs.pop("headers", {}) or {}
-    headers.setdefault(
-        "User-Agent",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36",
-    )
-    return _real_requests_get(url, headers=headers, **kwargs)
+_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/124.0.0.0 Safari/537.36"
+)
 
-requests.get = _requests_get_with_ua
+def _session_request_with_ua(self, method, url, **kwargs):
+    headers = dict(kwargs.pop("headers", None) or {})
+    headers.setdefault("User-Agent", _UA)
+    return _real_session_request(self, method, url, headers=headers, **kwargs)
+
+requests.Session.request = _session_request_with_ua
 
 from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, team_fielding, standings
 from pybaseball import cache as pybb_cache
