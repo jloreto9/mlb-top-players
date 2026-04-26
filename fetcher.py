@@ -1,7 +1,7 @@
 """
 fetcher.py
 ----------
-Descarga estadísticas desde FanGraphs via pybaseball.
+Descarga estadísticas desde la API JSON de FanGraphs (no el scraper HTML legacy).
 Caché local Parquet:  6 h para temporada en curso, 1 año para pasadas.
 
 Funciones públicas:
@@ -9,34 +9,39 @@ Funciones públicas:
     pitching(year)      → leaderboard individual pitchers
     team_bat(year)      → stats colectivas bateo por equipo
     team_pit(year)      → stats colectivas pitcheo por equipo
+    team_field(year)    → stats colectivas fildeo por equipo
+    get_standings(year) → standings por división (Baseball Reference)
 """
 
 from __future__ import annotations
 
+import pickle
 import time
 from datetime import datetime
 from pathlib import Path
 
-import cloudscraper
 import pandas as pd
 import requests
-import requests.sessions
+from pybaseball import standings
 
-# FanGraphs protege leaders-legacy.aspx con Cloudflare (TLS fingerprinting + JS challenge).
-# cloudscraper hereda de requests.Session y bypasea el challenge automáticamente.
-#
-# Hay que parchear DOS referencias:
-#   - requests.Session        → usado por código que instancia la clase directamente
-#   - requests.sessions.Session → usado por requests.get() vía requests.api.request(),
-#                                 que hace `with sessions.Session() as session:`
-#     Parchear solo requests.Session no alcanza a requests.get().
-requests.Session = cloudscraper.CloudScraper
-requests.sessions.Session = cloudscraper.CloudScraper
+# ── Constantes ────────────────────────────────────────────────────────────────
 
-from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, team_fielding, standings
-from pybaseball import cache as pybb_cache
+_FG_API = "https://www.fangraphs.com/api/leaders/major-league/data"
 
-pybb_cache.enable()
+# El endpoint JSON de FanGraphs está en el mismo dominio que la web pero
+# es servido como API REST — las reglas de Cloudflare son distintas a las
+# del scraper HTML (leaders-legacy.aspx) que bloquea IPs de data centers.
+_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.fangraphs.com/leaders/major-league",
+    "Origin": "https://www.fangraphs.com",
+}
 
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
@@ -44,7 +49,7 @@ CACHE_DIR.mkdir(exist_ok=True)
 _NOW_YEAR: int = datetime.now().year
 
 
-# ── Helpers de caché ───────────────────────────────────────────────────────
+# ── Helpers de caché ───────────────────────────────────────────────────────────
 
 def _path(key: str) -> Path:
     return CACHE_DIR / f"{key}.parquet"
@@ -58,7 +63,7 @@ def _expired(path: Path, max_hours: float) -> bool:
 
 def _load(key: str, fetch_fn, year: int, force: bool) -> pd.DataFrame:
     path = _path(key)
-    ttl = 6.0 if year >= _NOW_YEAR else 24.0 * 365  # año actual: 6h · pasados: 1 año
+    ttl = 6.0 if year >= _NOW_YEAR else 24.0 * 365
     if not force and not _expired(path, ttl):
         print(f"[fetcher] caché → {path.name}")
         return pd.read_parquet(path)
@@ -74,49 +79,74 @@ def _load(key: str, fetch_fn, year: int, force: bool) -> pd.DataFrame:
     return df
 
 
-# ── API pública ────────────────────────────────────────────────────────────
+def _fg_fetch(params: dict) -> pd.DataFrame:
+    resp = requests.get(_FG_API, params=params, headers=_HEADERS, timeout=30)
+    resp.raise_for_status()
+    payload = resp.json()
+    rows = payload.get("data", payload) if isinstance(payload, dict) else payload
+    return pd.DataFrame(rows)
+
+
+# ── API pública ────────────────────────────────────────────────────────────────
 
 def batting(year: int, force: bool = False) -> pd.DataFrame:
-    """Leaderboard individual de bateadores (temporada completa, sin filtro de PA)."""
     return _load(
         f"bat_{year}",
-        lambda: batting_stats(year, qual=1, ind=1),
+        lambda: _fg_fetch({
+            "pos": "all", "stats": "bat", "lg": "all", "qual": 1,
+            "season": year, "season1": year, "ind": 1,
+            "pageitems": 10000, "pagenum": 1, "type": 8,
+            "sortdir": "default", "sortstat": "WAR",
+        }),
         year, force,
     )
 
 
 def pitching(year: int, force: bool = False) -> pd.DataFrame:
-    """Leaderboard individual de pitchers (temporada completa, sin filtro de IP)."""
     return _load(
         f"pit_{year}",
-        lambda: pitching_stats(year, qual=1, ind=1),
+        lambda: _fg_fetch({
+            "pos": "all", "stats": "pit", "lg": "all", "qual": 1,
+            "season": year, "season1": year, "ind": 1,
+            "pageitems": 10000, "pagenum": 1, "type": 8,
+            "sortdir": "default", "sortstat": "WAR",
+        }),
         year, force,
     )
 
 
 def team_bat(year: int, force: bool = False) -> pd.DataFrame:
-    """Stats colectivas de bateo por equipo (una fila por equipo)."""
     return _load(
         f"tbat_{year}",
-        lambda: team_batting(year),
+        lambda: _fg_fetch({
+            "pos": "all", "stats": "bat", "lg": "all", "qual": 0,
+            "season": year, "season1": year, "ind": 0,
+            "team": "0,ts", "pageitems": 30, "pagenum": 1, "type": 1,
+        }),
         year, force,
     )
 
 
 def team_pit(year: int, force: bool = False) -> pd.DataFrame:
-    """Stats colectivas de pitcheo por equipo (una fila por equipo)."""
     return _load(
         f"tpit_{year}",
-        lambda: team_pitching(year),
+        lambda: _fg_fetch({
+            "pos": "all", "stats": "pit", "lg": "all", "qual": 0,
+            "season": year, "season1": year, "ind": 0,
+            "team": "0,ts", "pageitems": 30, "pagenum": 1, "type": 1,
+        }),
         year, force,
     )
 
 
 def team_field(year: int, force: bool = False) -> pd.DataFrame:
-    """Stats colectivas de fildeo por equipo (una fila por equipo)."""
     return _load(
         f"tfield_{year}",
-        lambda: team_fielding(year),
+        lambda: _fg_fetch({
+            "pos": "all", "stats": "fld", "lg": "all", "qual": 0,
+            "season": year, "season1": year, "ind": 0,
+            "team": "0,ts", "pageitems": 30, "pagenum": 1, "type": 1,
+        }),
         year, force,
     )
 
@@ -124,12 +154,11 @@ def team_field(year: int, force: bool = False) -> pd.DataFrame:
 def get_standings(year: int, force: bool = False) -> list[pd.DataFrame]:
     """
     Standings por división desde Baseball Reference.
-    Retorna lista de 6 DataFrames en orden:
+    Retorna lista de 6 DataFrames:
     AL East, AL Central, AL West, NL East, NL Central, NL West
     """
-    import pickle
     cache_file = CACHE_DIR / f"standings_{year}.pkl"
-    ttl = 1.0 if year >= _NOW_YEAR else 24.0 * 365  # standings: cache 1h en temporada activa
+    ttl = 1.0 if year >= _NOW_YEAR else 24.0 * 365
 
     if not force and cache_file.exists():
         age = time.time() - cache_file.stat().st_mtime

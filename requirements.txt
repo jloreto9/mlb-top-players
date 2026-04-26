@@ -1,5 +1,4 @@
 pybaseball>=2.2.7
-cloudscraper>=1.2.0
 pandas>=2.0.0
 numpy>=1.24.0
 pyarrow>=14.0.0
