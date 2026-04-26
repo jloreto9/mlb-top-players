@@ -20,11 +20,18 @@ from pathlib import Path
 import cloudscraper
 import pandas as pd
 import requests
+import requests.sessions
 
 # FanGraphs protege leaders-legacy.aspx con Cloudflare (TLS fingerprinting + JS challenge).
 # cloudscraper hereda de requests.Session y bypasea el challenge automáticamente.
-# Al reemplazar la clase, pybaseball usa cloudscraper en todas sus llamadas HTTP.
+#
+# Hay que parchear DOS referencias:
+#   - requests.Session        → usado por código que instancia la clase directamente
+#   - requests.sessions.Session → usado por requests.get() vía requests.api.request(),
+#                                 que hace `with sessions.Session() as session:`
+#     Parchear solo requests.Session no alcanza a requests.get().
 requests.Session = cloudscraper.CloudScraper
+requests.sessions.Session = cloudscraper.CloudScraper
 
 from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, team_fielding, standings
 from pybaseball import cache as pybb_cache
