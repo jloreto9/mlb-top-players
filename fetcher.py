@@ -17,27 +17,14 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import cloudscraper
 import pandas as pd
 import requests
 
-# FanGraphs devuelve 403 si no hay User-Agent de navegador.
-# Patcheamos Session.request (no requests.get) porque pybaseball usa
-# requests.Session internamente — las sessions tienen su propio .get/.request
-# que no pasa por requests.get, así que ese parche no alcanza.
-_real_session_request = requests.Session.request
-
-_UA = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
-
-def _session_request_with_ua(self, method, url, **kwargs):
-    headers = dict(kwargs.pop("headers", None) or {})
-    headers.setdefault("User-Agent", _UA)
-    return _real_session_request(self, method, url, headers=headers, **kwargs)
-
-requests.Session.request = _session_request_with_ua
+# FanGraphs protege leaders-legacy.aspx con Cloudflare (TLS fingerprinting + JS challenge).
+# cloudscraper hereda de requests.Session y bypasea el challenge automáticamente.
+# Al reemplazar la clase, pybaseball usa cloudscraper en todas sus llamadas HTTP.
+requests.Session = cloudscraper.CloudScraper
 
 from pybaseball import batting_stats, pitching_stats, team_batting, team_pitching, team_fielding, standings
 from pybaseball import cache as pybb_cache

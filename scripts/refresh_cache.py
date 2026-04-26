@@ -39,7 +39,9 @@ def refresh(year: int) -> None:
             df = fn()
             print(f"  [OK] {name}: {len(df):,} filas")
         except Exception as e:
-            print(f"  [ERROR] {name}: {e}", file=sys.stderr)
+            import traceback
+            print(f"  [ERROR] {name}: {type(e).__name__}: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
             sys.exit(1)
 
 
