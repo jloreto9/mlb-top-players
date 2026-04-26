@@ -2,7 +2,7 @@
 """
 scripts/refresh_cache.py
 ------------------------
-Descarga y guarda los datos de FanGraphs para la temporada actual
+Descarga y guarda los datos para la temporada actual
 (y la anterior si estamos antes de julio).
 Se ejecuta manualmente o via GitHub Actions.
 
@@ -13,6 +13,7 @@ Uso:
 
 import argparse
 import sys
+import traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -24,29 +25,40 @@ import fetcher
 
 def refresh(year: int) -> None:
     print(f"\n{'='*50}")
-    print(f"  Refreshing FanGraphs data: {year}")
+    print(f"  Refreshing stats: {year}")
     print(f"{'='*50}")
 
-    tasks = [
-        ("batting",      lambda: fetcher.batting(year, force=True)),
-        ("pitching",     lambda: fetcher.pitching(year, force=True)),
-        ("team_batting", lambda: fetcher.team_bat(year, force=True)),
-        ("team_pitching",lambda: fetcher.team_pit(year, force=True)),
+    # Críticos: Baseball Reference — accesibles desde CI
+    critical_tasks = [
+        ("batting",  lambda: fetcher.batting(year, force=True)),
+        ("pitching", lambda: fetcher.pitching(year, force=True)),
     ]
 
-    for name, fn in tasks:
+    # Best-effort: FanGraphs — puede fallar en CI por bloqueo de IP
+    best_effort_tasks = [
+        ("team_batting",  lambda: fetcher.team_bat(year, force=True)),
+        ("team_pitching", lambda: fetcher.team_pit(year, force=True)),
+    ]
+
+    for name, fn in critical_tasks:
         try:
             df = fn()
             print(f"  [OK] {name}: {len(df):,} filas")
         except Exception as e:
-            import traceback
             print(f"  [ERROR] {name}: {type(e).__name__}: {e}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
             sys.exit(1)
 
+    for name, fn in best_effort_tasks:
+        try:
+            df = fn()
+            print(f"  [OK] {name}: {len(df):,} filas")
+        except Exception as e:
+            print(f"  [WARN] {name}: {type(e).__name__}: {e} (omitido)", file=sys.stderr)
+
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Refresh FanGraphs cache")
+    parser = argparse.ArgumentParser(description="Refresh stats cache")
     parser.add_argument("--year", type=int, default=None,
                         help="Temporada a refrescar (default: automatico)")
     args = parser.parse_args()
@@ -57,10 +69,7 @@ def main() -> None:
     if args.year:
         years = [args.year]
     else:
-        # Siempre refrescar el año actual
         years = [current_year]
-        # Si estamos antes de julio, tambien refrescar el año anterior
-        # (los datos finales de temporada pasada pueden actualizarse)
         if now.month < 7:
             years.append(current_year - 1)
 
