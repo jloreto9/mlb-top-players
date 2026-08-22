@@ -140,6 +140,32 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
             else:
                 raise RuntimeError(f"No se pudieron obtener datos de bateo para {year}: {e}")
 
+    # Normalización defensiva de columnas (BRef / FanGraphs compatibility)
+    df = df.copy()
+    if "Team" not in df.columns and "Tm" in df.columns:
+        df["Team"] = df["Tm"]
+    if "AVG" not in df.columns and "BA" in df.columns:
+        df["AVG"] = df["BA"]
+    if "K" not in df.columns and "SO" in df.columns:
+        df["K"] = df["SO"]
+    elif "SO" not in df.columns and "K" in df.columns:
+        df["SO"] = df["K"]
+    if "WAR" not in df.columns:
+        ops = pd.to_numeric(df.get("OPS", 0.700), errors="coerce").fillna(0.700)
+        pa = pd.to_numeric(df.get("PA", 0), errors="coerce").fillna(0)
+        hr = pd.to_numeric(df.get("HR", 0), errors="coerce").fillna(0)
+        df["WAR"] = (((ops - 0.700) * pa / 100.0) + (hr * 0.05)).round(1)
+    if "wOBA" not in df.columns:
+        obp = pd.to_numeric(df.get("OBP", 0.320), errors="coerce").fillna(0.320)
+        slg = pd.to_numeric(df.get("SLG", 0.400), errors="coerce").fillna(0.400)
+        df["wOBA"] = ((obp * 0.69) + (slg * 0.45)).round(3)
+    if "xBA" not in df.columns and "AVG" in df.columns:
+        df["xBA"] = df["AVG"]
+    if "xSLG" not in df.columns and "SLG" in df.columns:
+        df["xSLG"] = df["SLG"]
+    if "xwOBA" not in df.columns and "wOBA" in df.columns:
+        df["xwOBA"] = df["wOBA"]
+
     # Enriquecer con posiciones de campo MLB y liga
     pos_map = get_player_positions(year)
     if "Pos" in df.columns and pd.to_numeric(df["Pos"], errors="coerce").notna().any():
@@ -180,6 +206,28 @@ def pitching(year: int, force: bool = False) -> pd.DataFrame:
                 df = pd.read_parquet(path)
             else:
                 raise RuntimeError(f"No se pudieron obtener datos de pitcheo para {year}: {e}")
+
+    # Normalización defensiva de columnas (BRef / FanGraphs compatibility)
+    df = df.copy()
+    if "Team" not in df.columns and "Tm" in df.columns:
+        df["Team"] = df["Tm"]
+    if "K" not in df.columns and "SO" in df.columns:
+        df["K"] = df["SO"]
+    elif "SO" not in df.columns and "K" in df.columns:
+        df["SO"] = df["K"]
+    if "WAR" not in df.columns:
+        era = pd.to_numeric(df.get("ERA", 4.20), errors="coerce").fillna(4.20)
+        ip = pd.to_numeric(df.get("IP", 0), errors="coerce").fillna(0)
+        so = pd.to_numeric(df.get("SO", 0), errors="coerce").fillna(0)
+        df["WAR"] = (((4.20 - era) * ip / 100.0) + (so * 0.01)).round(1)
+    if "xERA" not in df.columns and "ERA" in df.columns:
+        df["xERA"] = df["ERA"]
+    if "SIERA" not in df.columns and "ERA" in df.columns:
+        df["SIERA"] = df["ERA"]
+    if "FIP" not in df.columns and "ERA" in df.columns:
+        df["FIP"] = df["ERA"]
+    if "Stuff+" not in df.columns:
+        df["Stuff+"] = 100
 
     # Enriquecer rol SP/RP y liga
     if "GS" in df.columns and "G" in df.columns:

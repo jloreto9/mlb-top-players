@@ -80,36 +80,50 @@ st.markdown("### 🌟 Líderes de la Temporada")
 k1, k2, k3, k4 = st.columns(4)
 
 if q_bat is not None and not q_bat.empty:
-    top_war_bat = q_bat.sort_values("WAR", ascending=False).iloc[0]
-    top_hr_bat = q_bat.sort_values("HR", ascending=False).iloc[0]
+    # Líder WAR / Fantasy
+    bat_sort_col = "WAR" if "WAR" in q_bat.columns else ("Fantasy_Pts" if "Fantasy_Pts" in q_bat.columns else ("OPS" if "OPS" in q_bat.columns else "R"))
+    top_war_bat = q_bat.sort_values(bat_sort_col, ascending=False).iloc[0]
+    val_disp = f"{top_war_bat[bat_sort_col]} {bat_sort_col}" if bat_sort_col in top_war_bat else ""
     k1.metric(
-        label=f"👑 Líder WAR Bateo ({top_war_bat['WAR']} WAR)",
-        value=top_war_bat["Name"],
-        delta=f"{top_war_bat['Team']} · {top_war_bat.get('Pos', 'DH')}",
-        delta_color="off"
-    )
-    k2.metric(
-        label=f"💥 Líder Jonrones ({int(top_hr_bat['HR'])} HR)",
-        value=top_hr_bat["Name"],
-        delta=f"{top_hr_bat['Team']} · {top_hr_bat.get('Pos', 'DH')}",
+        label=f"👑 Líder Bateo ({val_disp})",
+        value=top_war_bat.get("Name", "N/A"),
+        delta=f"{top_war_bat.get('Team', top_war_bat.get('Tm', ''))} · {top_war_bat.get('Pos', 'DH')}",
         delta_color="off"
     )
 
+    # Líder HR / RBI
+    hr_col = "HR" if "HR" in q_bat.columns else ("RBI" if "RBI" in q_bat.columns else "H")
+    if hr_col in q_bat.columns:
+        top_hr_bat = q_bat.sort_values(hr_col, ascending=False).iloc[0]
+        k2.metric(
+            label=f"💥 Líder {hr_col} ({int(top_hr_bat[hr_col])} {hr_col})",
+            value=top_hr_bat.get("Name", "N/A"),
+            delta=f"{top_hr_bat.get('Team', top_hr_bat.get('Tm', ''))} · {top_hr_bat.get('Pos', 'DH')}",
+            delta_color="off"
+        )
+
 if q_pit is not None and not q_pit.empty:
-    top_war_pit = q_pit.sort_values("WAR", ascending=False).iloc[0]
-    top_k_pit = q_pit.sort_values("SO", ascending=False).iloc[0]
+    # Líder WAR / Fantasy Pitcheo
+    pit_sort_col = "WAR" if "WAR" in q_pit.columns else ("Fantasy_Pts" if "Fantasy_Pts" in q_pit.columns else ("SO" if "SO" in q_pit.columns else "W"))
+    top_war_pit = q_pit.sort_values(pit_sort_col, ascending=False).iloc[0]
+    val_pit_disp = f"{top_war_pit[pit_sort_col]} {pit_sort_col}" if pit_sort_col in top_war_pit else ""
     k3.metric(
-        label=f"👑 Líder WAR Pitcheo ({top_war_pit['WAR']} WAR)",
-        value=top_war_pit["Name"],
-        delta=f"{top_war_pit['Team']} · {top_war_pit.get('Pos', 'SP')}",
+        label=f"👑 Líder Pitcheo ({val_pit_disp})",
+        value=top_war_pit.get("Name", "N/A"),
+        delta=f"{top_war_pit.get('Team', top_war_pit.get('Tm', ''))} · {top_war_pit.get('Pos', 'SP')}",
         delta_color="off"
     )
-    k4.metric(
-        label=f"⚡ Líder Ponches ({int(top_k_pit['SO'])} K)",
-        value=top_k_pit["Name"],
-        delta=f"{top_k_pit['Team']} · {top_k_pit.get('Pos', 'SP')}",
-        delta_color="off"
-    )
+
+    # Líder Ponches SO / K
+    k_col = "SO" if "SO" in q_pit.columns else ("K" if "K" in q_pit.columns else "W")
+    if k_col in q_pit.columns:
+        top_k_pit = q_pit.sort_values(k_col, ascending=False).iloc[0]
+        k4.metric(
+            label=f"⚡ Líder Ponches ({int(top_k_pit[k_col])} K)",
+            value=top_k_pit.get("Name", "N/A"),
+            delta=f"{top_k_pit.get('Team', top_k_pit.get('Tm', ''))} · {top_k_pit.get('Pos', 'SP')}",
+            delta_color="off"
+        )
 
 st.divider()
 

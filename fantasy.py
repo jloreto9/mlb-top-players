@@ -6,7 +6,16 @@ def calculate_batting_fantasy(df: pd.DataFrame, scoring_preset: str = 'ESPN Stan
     if df.empty:
         return df
     out = df.copy()
-    num_cols = ['PA', 'AB', 'H', '1B', '2B', '3B', 'HR', 'R', 'RBI', 'BB', 'HBP', 'SO', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'wOBA', 'xBA', 'xSLG', 'xwOBA', 'HardHit%', 'Barrel%', 'EV', 'maxEV', 'CSW%']
+    if 'Team' not in out.columns and 'Tm' in out.columns:
+        out['Team'] = out['Tm']
+    if 'AVG' not in out.columns and 'BA' in out.columns:
+        out['AVG'] = out['BA']
+    if 'K' not in out.columns and 'SO' in out.columns:
+        out['K'] = out['SO']
+    elif 'SO' not in out.columns and 'K' in out.columns:
+        out['SO'] = out['K']
+
+    num_cols = ['PA', 'AB', 'H', '1B', '2B', '3B', 'HR', 'R', 'RBI', 'BB', 'HBP', 'SO', 'K', 'SB', 'CS', 'AVG', 'OBP', 'SLG', 'wOBA', 'xBA', 'xSLG', 'xwOBA', 'HardHit%', 'Barrel%', 'EV', 'maxEV', 'CSW%', 'WAR']
     for c in num_cols:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors='coerce')
@@ -57,7 +66,14 @@ def calculate_pitching_fantasy(df: pd.DataFrame, scoring_preset: str = 'ESPN Sta
     if df.empty:
         return df
     out = df.copy()
-    num_cols = ['W', 'L', 'G', 'GS', 'SV', 'BS', 'HLD', 'IP', 'H', 'ER', 'HR', 'BB', 'SO', 'ERA', 'WHIP', 'FIP', 'xFIP', 'SIERA', 'xERA', 'Stuff+', 'Location+', 'Pitching+', 'K%', 'BB%', 'K-BB%', 'CSW%']
+    if 'Team' not in out.columns and 'Tm' in out.columns:
+        out['Team'] = out['Tm']
+    if 'K' not in out.columns and 'SO' in out.columns:
+        out['K'] = out['SO']
+    elif 'SO' not in out.columns and 'K' in out.columns:
+        out['SO'] = out['K']
+
+    num_cols = ['W', 'L', 'G', 'GS', 'SV', 'BS', 'HLD', 'IP', 'H', 'ER', 'HR', 'BB', 'SO', 'K', 'ERA', 'WHIP', 'FIP', 'xFIP', 'SIERA', 'xERA', 'Stuff+', 'Location+', 'Pitching+', 'K%', 'BB%', 'K-BB%', 'CSW%', 'WAR']
     for c in num_cols:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors='coerce')
@@ -101,7 +117,7 @@ def calculate_pitching_fantasy(df: pd.DataFrame, scoring_preset: str = 'ESPN Sta
 def get_buy_low_sell_high(df_bat: pd.DataFrame, df_pit: pd.DataFrame, min_pa: int = 80, min_ip: int = 30) -> dict[str, pd.DataFrame]:
     results = {}
     if not df_bat.empty and 'diff_wOBA' in df_bat.columns:
-        bat_qual = df_bat[df_bat['PA'].fillna(0) >= min_pa].copy()
+        bat_qual = df_bat[df_bat.get('PA', pd.Series(0, index=df_bat.index)).fillna(0) >= min_pa].copy()
         buy_bat = bat_qual[bat_qual['diff_wOBA'] > 0.015].sort_values('diff_wOBA', ascending=False)
         sell_bat = bat_qual[bat_qual['diff_wOBA'] < -0.015].sort_values('diff_wOBA', ascending=True)
         results['bat_buy_low'] = buy_bat
@@ -111,7 +127,7 @@ def get_buy_low_sell_high(df_bat: pd.DataFrame, df_pit: pd.DataFrame, min_pa: in
         results['bat_sell_high'] = pd.DataFrame()
 
     if not df_pit.empty and 'diff_ERA' in df_pit.columns:
-        pit_qual = df_pit[df_pit['IP'].fillna(0) >= min_ip].copy()
+        pit_qual = df_pit[df_pit.get('IP', pd.Series(0, index=df_pit.index)).fillna(0) >= min_ip].copy()
         buy_pit = pit_qual[pit_qual['diff_ERA'] > 0.35].sort_values('diff_ERA', ascending=False)
         sell_pit = pit_qual[pit_qual['diff_ERA'] < -0.35].sort_values('diff_ERA', ascending=True)
         results['pit_buy_low'] = buy_pit
@@ -126,11 +142,15 @@ def evaluate_sp_matchups(schedule_df: pd.DataFrame, pit_df: pd.DataFrame, tbat_d
         return pd.DataFrame()
 
     opp_strength = {}
-    if not tbat_df.empty and 'Team' in tbat_df.columns:
-        for _, row in tbat_df.iterrows():
-            tm = str(row['Team']).upper()
-            wrc = pd.to_numeric(row.get('wRC+', 100), errors='coerce')
-            opp_strength[tm] = 100.0 if pd.isna(wrc) else float(wrc)
+    if not tbat_df.empty:
+        tb_copy = tbat_df.copy()
+        if 'Team' not in tb_copy.columns and 'Tm' in tb_copy.columns:
+            tb_copy['Team'] = tb_copy['Tm']
+        if 'Team' in tb_copy.columns:
+            for _, row in tb_copy.iterrows():
+                tm = str(row['Team']).upper()
+                wrc = pd.to_numeric(row.get('wRC+', 100), errors='coerce')
+                opp_strength[tm] = 100.0 if pd.isna(wrc) else float(wrc)
 
     pit_map = {}
     if not pit_df.empty and 'Name' in pit_df.columns:
@@ -144,7 +164,7 @@ def evaluate_sp_matchups(schedule_df: pd.DataFrame, pit_df: pd.DataFrame, tbat_d
                 'SIERA': pd.to_numeric(row.get('SIERA', 4.20), errors='coerce'),
                 'WHIP': pd.to_numeric(row.get('WHIP', 1.30), errors='coerce'),
                 'Stuff+': pd.to_numeric(row.get('Stuff+', 100), errors='coerce'),
-                'Team': row.get('Team', ''),
+                'Team': row.get('Team', row.get('Tm', '')),
             }
 
     eval_rows = []
@@ -218,18 +238,32 @@ def _score_sp(pitcher_name: str, pitcher_team: str, opp_team: str, venue: str, l
         'Verdict': tier,
     }
 
+def _safe_int(val, default: int = 0) -> int:
+    if pd.isna(val):
+        return default
+    try:
+        return int(float(val))
+    except (ValueError, TypeError):
+        return default
+
 def get_bullpen_depth_chart(df_pit: pd.DataFrame) -> pd.DataFrame:
     if df_pit.empty:
         return pd.DataFrame()
     out = df_pit.copy()
-    for c in ['SV', 'HLD', 'BS', 'ERA', 'WHIP', 'K%', 'BB%', 'Stuff+', 'IP']:
+    if 'Team' not in out.columns and 'Tm' in out.columns:
+        out['Team'] = out['Tm']
+    elif 'Team' not in out.columns:
+        out['Team'] = 'UNK'
+
+    for c in ['SV', 'HLD', 'BS', 'ERA', 'WHIP', 'K%', 'BB%', 'Stuff+', 'IP', 'G', 'GS']:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors='coerce')
 
     is_rp = (out.get('Pos') == 'RP') | (out.get('GS', 0).fillna(0) <= 3)
-    rp_df = out[is_rp & (out.get('G', 0).fillna(0) >= 5)].copy()
+    rp_df = out[is_rp & (out.get('G', 0).fillna(0) >= 3)].copy()
     if rp_df.empty:
-        return pd.DataFrame()
+        # Fallback si pocos partidos: tomar todo out
+        rp_df = out.copy()
 
     bullpen_rows = []
     teams = rp_df['Team'].dropna().unique()
@@ -237,10 +271,12 @@ def get_bullpen_depth_chart(df_pit: pd.DataFrame) -> pd.DataFrame:
         tm_rps = rp_df[rp_df['Team'] == tm].copy()
         if tm_rps.empty:
             continue
-        tm_rps = tm_rps.sort_values(by=['SV', 'HLD', 'K%'], ascending=[False, False, False])
+        sort_by_cols = [c for c in ['SV', 'HLD', 'K%', 'SO'] if c in tm_rps.columns]
+        if sort_by_cols:
+            tm_rps = tm_rps.sort_values(by=sort_by_cols, ascending=[False]*len(sort_by_cols))
         for rank, (_, row) in enumerate(tm_rps.head(4).iterrows(), 1):
-            sv = int(row.get('SV', 0) or 0)
-            hld = int(row.get('HLD', 0) or 0)
+            sv = _safe_int(row.get('SV'))
+            hld = _safe_int(row.get('HLD'))
             k_pct = row.get('K%', 0.0)
             stuff = row.get('Stuff+', 100)
 
@@ -259,7 +295,7 @@ def get_bullpen_depth_chart(df_pit: pd.DataFrame) -> pd.DataFrame:
 
             bullpen_rows.append({
                 'Team': tm,
-                'Pitcher': row['Name'],
+                'Pitcher': row.get('Name', 'Pitcher'),
                 'Role': role,
                 'Status': status,
                 'SV': sv,
