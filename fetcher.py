@@ -19,7 +19,7 @@ from typing import Any
 import pandas as pd
 import requests
 
-from constants import TEAM_LEAGUE, MLB_TEAMS
+from constants import TEAM_LEAGUE, MLB_TEAMS, resolve_team_league
 
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
@@ -293,13 +293,13 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
     except Exception as e:
         print(f"[fetcher] Aviso: no se pudo fusionar Statcast batting: {e}")
 
-    # Fallbacks si Statcast no contiene al jugador
-    if "xBA" not in df.columns and "AVG" in df.columns:
-        df["xBA"] = df["AVG"]
-    if "xSLG" not in df.columns and "SLG" in df.columns:
-        df["xSLG"] = df["SLG"]
-    if "xwOBA" not in df.columns and "wOBA" in df.columns:
-        df["xwOBA"] = df["wOBA"]
+    # Asegurar diferenciales Statcast explícitos
+    if "xBA" in df.columns and "AVG" in df.columns:
+        df["diff_BA"] = (pd.to_numeric(df["xBA"], errors="coerce") - pd.to_numeric(df["AVG"], errors="coerce")).round(3)
+    if "xSLG" in df.columns and "SLG" in df.columns:
+        df["diff_SLG"] = (pd.to_numeric(df["xSLG"], errors="coerce") - pd.to_numeric(df["SLG"], errors="coerce")).round(3)
+    if "xwOBA" in df.columns and "wOBA" in df.columns:
+        df["diff_wOBA"] = (pd.to_numeric(df["xwOBA"], errors="coerce") - pd.to_numeric(df["wOBA"], errors="coerce")).round(3)
 
     # Enriquecer con posiciones de campo MLB y liga
     pos_map = get_player_positions(year)
@@ -307,8 +307,7 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
         df["Pos_WAR"] = df["Pos"]
     df["Pos"] = df["Name"].map(pos_map).fillna("UT")
 
-    if "League" not in df.columns and "Team" in df.columns:
-        df["League"] = df["Team"].str.upper().map(TEAM_LEAGUE).fillna("UNK")
+    df["League"] = df["Team"].apply(resolve_team_league)
 
     return df
 
@@ -384,6 +383,10 @@ def pitching(year: int, force: bool = False) -> pd.DataFrame:
     if "Stuff+" not in df.columns:
         df["Stuff+"] = 100
 
+    # Asegurar diferencial de ERA explícito
+    if "xERA" in df.columns and "ERA" in df.columns:
+        df["diff_ERA"] = (pd.to_numeric(df["ERA"], errors="coerce") - pd.to_numeric(df["xERA"], errors="coerce")).round(2)
+
     # Enriquecer rol SP/RP y liga
     if "GS" in df.columns and "G" in df.columns:
         gs = pd.to_numeric(df["GS"], errors="coerce").fillna(0)
@@ -392,8 +395,7 @@ def pitching(year: int, force: bool = False) -> pd.DataFrame:
     else:
         df["Pos"] = "P"
 
-    if "League" not in df.columns and "Team" in df.columns:
-        df["League"] = df["Team"].str.upper().map(TEAM_LEAGUE).fillna("UNK")
+    df["League"] = df["Team"].apply(resolve_team_league)
 
     return df
 

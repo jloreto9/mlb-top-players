@@ -4,27 +4,76 @@ constants.py
 Mapeo de equipos, ligas, columnas de display, métricas Statcast y configuraciones de Fantasy Baseball.
 """
 
-# ── Equipo → Liga ──────────────────────────────────────────────────────────
+# ── Equipo → Liga (Abreviaturas, Nombres y Ciudades) ─────────────────────────
 TEAM_LEAGUE: dict[str, str] = {
     # AL East
-    "BAL": "AL", "BOS": "AL", "NYY": "AL",
-    "TB":  "AL", "TBR": "AL", "TOR": "AL",
+    "BAL": "AL", "BALTIMORE": "AL", "BALTIMORE ORIOLES": "AL",
+    "BOS": "AL", "BOSTON": "AL", "BOSTON RED SOX": "AL",
+    "NYY": "AL", "NEW YORK YANKEES": "AL",
+    "TB": "AL", "TBR": "AL", "TAMPA BAY": "AL", "TAMPA BAY RAYS": "AL",
+    "TOR": "AL", "TORONTO": "AL", "TORONTO BLUE JAYS": "AL",
+    
     # AL Central
-    "CHW": "AL", "CWS": "AL", "CLE": "AL",
-    "DET": "AL", "KC":  "AL", "KCR": "AL", "MIN": "AL",
+    "CHW": "AL", "CWS": "AL", "CHICAGO WHITE SOX": "AL",
+    "CLE": "AL", "CLEVELAND": "AL", "CLEVELAND GUARDIANS": "AL", "CLEVELAND INDIANS": "AL",
+    "DET": "AL", "DETROIT": "AL", "DETROIT TIGERS": "AL",
+    "KC": "AL", "KCR": "AL", "KANSAS CITY": "AL", "KANSAS CITY ROYALS": "AL",
+    "MIN": "AL", "MINNESOTA": "AL", "MINNESOTA TWINS": "AL",
+    
     # AL West
-    "HOU": "AL", "LAA": "AL", "OAK": "AL", "ATH": "AL", "SAC": "AL", "SEA": "AL", "TEX": "AL",
+    "HOU": "AL", "HOUSTON": "AL", "HOUSTON ASTROS": "AL",
+    "LAA": "AL", "LOS ANGELES ANGELS": "AL", "ANAHEIM": "AL",
+    "OAK": "AL", "ATH": "AL", "ATHLETICS": "AL", "OAKLAND": "AL", "OAKLAND ATHLETICS": "AL", "SAC": "AL",
+    "SEA": "AL", "SEATTLE": "AL", "SEATTLE MARINERS": "AL",
+    "TEX": "AL", "TEXAS": "AL", "TEXAS RANGERS": "AL",
+    
     # NL East
-    "ATL": "NL", "MIA": "NL", "NYM": "NL", "PHI": "NL",
-    "WSH": "NL", "WSN": "NL",
+    "ATL": "NL", "ATLANTA": "NL", "ATLANTA BRAVES": "NL",
+    "MIA": "NL", "MIAMI": "NL", "MIAMI MARLINS": "NL", "FLORIDA": "NL",
+    "NYM": "NL", "NEW YORK METS": "NL",
+    "PHI": "NL", "PHILADELPHIA": "NL", "PHILADELPHIA PHILLIES": "NL",
+    "WSH": "NL", "WSN": "NL", "WASHINGTON": "NL", "WASHINGTON NATIONALS": "NL",
+    
     # NL Central
-    "CHC": "NL", "CIN": "NL", "MIL": "NL", "PIT": "NL", "STL": "NL",
+    "CHC": "NL", "CHICAGO CUBS": "NL",
+    "CIN": "NL", "CINCINNATI": "NL", "CINCINNATI REDS": "NL",
+    "MIL": "NL", "MILWAUKEE": "NL", "MILWAUKEE BREWERS": "NL",
+    "PIT": "NL", "PITTSBURGH": "NL", "PITTSBURGH PIRATES": "NL",
+    "STL": "NL", "ST. LOUIS": "NL", "ST. LOUIS CARDINALS": "NL",
+    
     # NL West
-    "ARI": "NL", "AZ":  "NL", "COL": "NL",
-    "LAD": "NL", "LA":  "NL",
-    "SD":  "NL", "SDP": "NL",
-    "SF":  "NL", "SFG": "NL",
+    "ARI": "NL", "AZ": "NL", "ARIZONA": "NL", "ARIZONA DIAMONDBACKS": "NL",
+    "COL": "NL", "COLORADO": "NL", "COLORADO ROCKIES": "NL",
+    "LAD": "NL", "LOS ANGELES DODGERS": "NL",
+    "SD": "NL", "SDP": "NL", "SAN DIEGO": "NL", "SAN DIEGO PADRES": "NL",
+    "SF": "NL", "SFG": "NL", "SAN FRANCISCO": "NL", "SAN FRANCISCO GIANTS": "NL",
+
+    # Ciudades ambiguas (default razonable para BRef / Savant)
+    "NEW YORK": "AL",
+    "LOS ANGELES": "NL",
+    "CHICAGO": "AL",
 }
+
+
+def resolve_team_league(team_str: str | None) -> str:
+    """Resuelve la liga de un equipo o cadena compuesta (ej: 'Athletics,Cincinnati' -> 'NL')."""
+    if team_str is None:
+        return "UNK"
+    s = str(team_str).strip()
+    if not s or s.lower() in ("nan", "none", "unk", "tot"):
+        return "UNK"
+    if s.upper() in TEAM_LEAGUE:
+        return TEAM_LEAGUE[s.upper()]
+    # Si tiene comas (jugador traspasado), evaluar el último equipo
+    if "," in s:
+        last_team = s.split(",")[-1].strip()
+        if last_team.upper() in TEAM_LEAGUE:
+            return TEAM_LEAGUE[last_team.upper()]
+    # Buscar tokens
+    for token in reversed(s.replace(",", " ").split()):
+        if token.upper() in TEAM_LEAGUE:
+            return TEAM_LEAGUE[token.upper()]
+    return "MLB"
 
 # ── Nombres completos de equipos MLB (Abreviatura -> Nombre) ────────────────
 MLB_TEAMS: dict[str, str] = {
@@ -62,6 +111,7 @@ MLB_TEAMS: dict[str, str] = {
     "AZ":  "Arizona Diamondbacks",
     "COL": "Colorado Rockies",
     "LAD": "Los Angeles Dodgers",
+    "LA":  "Los Angeles Dodgers",
     "SD":  "San Diego Padres",
     "SDP": "San Diego Padres",
     "SF":  "San Francisco Giants",
@@ -98,7 +148,7 @@ BAT_FANTASY_COLS = [
 STATCAST_BAT_COLS = [
     "Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA",
     "SLG", "xSLG", "diff_SLG", "wOBA", "xwOBA", "diff_wOBA",
-    "EV", "maxEV", "HardHit%", "Barrel%", "CSW%",
+    "EV", "maxEV", "HardHit%", "Barrel%", "SweetSpot%",
 ]
 
 # ── Columnas individuales — Pitchers Estándar ───────────────────────────────
