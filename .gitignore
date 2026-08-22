@@ -16,5 +16,6 @@ cache/.pybaseball/
 # Chadwick register cache (se regenera automaticamente)
 cache/chadwick_register.parquet
 
-# Statcast cache antiguo (ya no se usa)
-cache/statcast_*.parquet
+# Los parquets de Statcast SI se commitean
+# cache/statcast_*.parquet  ← NO ignorar
+
