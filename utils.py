@@ -1,41 +1,52 @@
 """
-utils.py — Formateo visual de columnas numéricas.
+utils.py — Formateo visual de columnas numéricas y helpers de UI.
 
 Reglas:
-  Slash stats  (AVG, OBP, SLG, wOBA…) → .xxx  (sin cero inicial)
-                                          si >= 1 → x.xxx
-  Porcentajes  (BB%, K%, LOB%…)        → XX.XX%  (FanGraphs los devuelve como 22.5)
-  Enteros      (G, PA, HR, W, wRC+…)   → sin decimales
-  Ratios       (ERA, FIP, WHIP…)       → X.XX
-  Tasas 1d     (WAR, IP, K/9…)         → X.X
+  Slash stats  (AVG, OBP, SLG, wOBA…)  → .xxx  (sin cero inicial si < 1)
+  Porcentajes  (BB%, K%, Barrel%…)    → XX.X% o XX.XX% (detecta automáticamente si viene en 0.25 o 25.0)
+  Diferenciales(diff_wOBA, diff_ERA…) → +X.XXX / -X.XXX
+  Z-Scores     (z_HR, z_Total…)       → +X.XX / -X.XX
+  Enteros      (G, PA, HR, W, Rank…)  → sin decimales
+  Ratios       (ERA, FIP, WHIP…)      → X.XX
+  Tasas 1d     (WAR, IP, K/9, EV…)    → X.X
 """
 
 import pandas as pd
 
 # ── Clasificación de columnas ──────────────────────────────────────────────
 
-SLASH_COLS = {"AVG", "OBP", "SLG", "OPS", "wOBA", "ISO", "BABIP"}
+SLASH_COLS = {"AVG", "OBP", "SLG", "OPS", "wOBA", "xwOBA", "xBA", "xSLG", "ISO", "BABIP"}
 
 PCT_COLS = {
-    "BB%", "K%", "K-BB%", "LOB%",
+    "BB%", "K%", "K-BB%", "LOB%", "CSW%",
     "HR/FB", "LD%", "GB%", "FB%", "IFFB%", "IFH%", "BUH%",
-    "Soft%", "Med%", "Hard%",
+    "Soft%", "Med%", "Hard%", "HardHit%", "Barrel%",
     "Pull%", "Cent%", "Oppo%",
-    "SwStr%", "CStr%", "Zone%",
+    "SwStr%", "CStr%", "Zone%", "FP%",
     "F-Strike%", "O-Swing%", "Z-Swing%", "Swing%",
     "O-Contact%", "Z-Contact%", "Contact%",
+}
+
+DIFF_SLASH_COLS = {"diff_BA", "diff_SLG", "diff_wOBA"}
+DIFF_RATE_COLS = {"diff_ERA"}
+
+ZSCORE_COLS = {
+    "z_R", "z_HR", "z_RBI", "z_SB", "z_AVG", "z_OBP",
+    "z_W", "z_SV", "z_HLD", "z_SO", "z_ERA", "z_WHIP",
+    "z_Total", "z_Points",
 }
 
 INT_COLS = {
     "G", "GS", "PA", "AB", "H", "1B", "2B", "3B", "HR",
     "R", "RBI", "BB", "IBB", "SO", "HBP", "SF", "SH", "GDP",
-    "SB", "CS", "W", "L", "CG", "ShO", "SV", "BS", "TBF",
-    "wRC+", "ERA-", "FIP-", "xFIP-",
+    "SB", "CS", "W", "L", "CG", "ShO", "SV", "BS", "HLD", "TBF",
+    "wRC+", "ERA-", "FIP-", "xFIP-", "Stuff+", "Location+", "Pitching+",
+    "Fantasy_Rank", "Rank", "Pos", "Inn", "PO", "A", "E", "DP", "DRS",
 }
 
-RATE1_COLS = {"WAR", "IP", "K/9", "BB/9", "HR/9", "H/9", "RS/9"}
+RATE1_COLS = {"WAR", "IP", "K/9", "BB/9", "HR/9", "H/9", "RS/9", "EV", "maxEV", "UZR", "UZR/150", "Def", "Fantasy_Pts"}
 
-RATE2_COLS = {"ERA", "FIP", "xFIP", "SIERA", "WHIP", "K/BB", "AVG_velo"}
+RATE2_COLS = {"ERA", "xERA", "FIP", "xFIP", "SIERA", "botERA", "WHIP", "K/BB", "AVG_velo"}
 
 
 # ── Funciones de formato ───────────────────────────────────────────────────
@@ -43,16 +54,46 @@ RATE2_COLS = {"ERA", "FIP", "xFIP", "SIERA", "WHIP", "K/BB", "AVG_velo"}
 def _fmt_slash(v) -> str:
     if pd.isna(v):
         return ""
-    v = float(v)
-    s = f"{v:.3f}"
-    return s.lstrip("0") if 0 <= v < 1 else s   # .317  o  1.012
+    try:
+        val = float(v)
+        s = f"{val:.3f}"
+        return s.lstrip("0") if 0 <= val < 1 else s
+    except (ValueError, TypeError):
+        return str(v)
 
 
 def _fmt_pct(v) -> str:
     if pd.isna(v):
         return ""
-    # FanGraphs devuelve fracciones (0.225 = 22.5%) → multiplicar ×100
-    return f"{float(v) * 100:.2f}%"
+    try:
+        val = float(v)
+        # Si viene en escala [0, 1] (ej: 0.225) multiplicar por 100
+        # Si ya viene en escala [0, 100] (ej: 22.5) dejar tal cual
+        if abs(val) <= 1.0:
+            val = val * 100.0
+        return f"{val:.1f}%"
+    except (ValueError, TypeError):
+        return str(v)
+
+
+def _fmt_diff(v, decimals: int = 3) -> str:
+    if pd.isna(v):
+        return ""
+    try:
+        val = float(v)
+        return f"{val:+.{decimals}f}"
+    except (ValueError, TypeError):
+        return str(v)
+
+
+def _fmt_zscore(v) -> str:
+    if pd.isna(v):
+        return ""
+    try:
+        val = float(v)
+        return f"{val:+.2f}"
+    except (ValueError, TypeError):
+        return str(v)
 
 
 def _fmt_int(v) -> str:
@@ -60,24 +101,33 @@ def _fmt_int(v) -> str:
         return ""
     try:
         return str(int(round(float(v))))
-    except (ValueError, OverflowError):
-        return ""
+    except (ValueError, OverflowError, TypeError):
+        return str(v)
 
 
 def _fmt_rate(v, d: int = 2) -> str:
     if pd.isna(v):
         return ""
-    return f"{float(v):.{d}f}"
+    try:
+        return f"{float(v):.{d}f}"
+    except (ValueError, TypeError):
+        return str(v)
 
 
 def format_display(df: pd.DataFrame) -> pd.DataFrame:
-    """Devuelve copia del DataFrame con columnas formateadas como strings."""
+    """Devuelve copia del DataFrame con columnas formateadas como strings estéticas."""
     out = df.copy().astype(object)
     for col in out.columns:
         if col in SLASH_COLS:
             out[col] = out[col].apply(_fmt_slash)
         elif col in PCT_COLS:
             out[col] = out[col].apply(_fmt_pct)
+        elif col in DIFF_SLASH_COLS:
+            out[col] = out[col].apply(lambda v: _fmt_diff(v, 3))
+        elif col in DIFF_RATE_COLS:
+            out[col] = out[col].apply(lambda v: _fmt_diff(v, 2))
+        elif col in ZSCORE_COLS:
+            out[col] = out[col].apply(_fmt_zscore)
         elif col in INT_COLS:
             out[col] = out[col].apply(_fmt_int)
         elif col in RATE1_COLS:
@@ -88,10 +138,16 @@ def format_display(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def put_league_after_team(df: pd.DataFrame) -> pd.DataFrame:
-    """Mueve la columna League para que quede inmediatamente después de Team."""
-    if "League" not in df.columns or "Team" not in df.columns:
+    """Mueve la columna League para que quede inmediatamente después de Team o Pos."""
+    if "League" not in df.columns:
         return df
     cols = [c for c in df.columns if c != "League"]
-    idx = cols.index("Team") + 1
+    if "Team" in cols:
+        idx = cols.index("Team") + 1
+    elif "Pos" in cols:
+        idx = cols.index("Pos") + 1
+    else:
+        idx = 1
     cols.insert(idx, "League")
     return df[cols]
+

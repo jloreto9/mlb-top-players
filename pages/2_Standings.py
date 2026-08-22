@@ -1,6 +1,6 @@
 """
 pages/2_Standings.py
-Standings MLB por división — Baseball Reference via pybaseball.
+Standings oficiales de MLB por División y Carrera por el Comodín (Wild Card) vía MLB Stats API.
 """
 
 import sys
@@ -14,133 +14,140 @@ import pandas as pd
 import fetcher
 
 st.set_page_config(
-    page_title="Standings · MLB Stats",
+    page_title="Standings & Playoffs · MLB Stats",
     page_icon="🏆",
     layout="wide",
 )
 
-# ── Constantes ──────────────────────────────────────────────────────────────
-DIVISIONS = [
-    ("AL East",    "AL"),
-    ("AL Central", "AL"),
-    ("AL West",    "AL"),
-    ("NL East",    "NL"),
-    ("NL Central", "NL"),
-    ("NL West",    "NL"),
-]
+DIVISIONS_AL = ["AL East", "AL Central", "AL West"]
+DIVISIONS_NL = ["NL East", "NL Central", "NL West"]
 
 _NOW_YEAR = datetime.now().year
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🏆 Standings")
-    st.caption("Fuente: Baseball Reference via pybaseball")
+    st.caption("Fuente: MLB Stats API Oficial")
     st.divider()
 
     year = st.selectbox(
         "Temporada",
         options=list(range(_NOW_YEAR, 2009, -1)),
-        index=0,       # default: año actual (standings en vivo)
+        index=0,
     )
     force = st.checkbox("🔄 Forzar re-descarga", value=False)
     st.divider()
     run_btn = st.button("▶ Cargar standings", type="primary", use_container_width=True)
 
 # ── Session state ────────────────────────────────────────────────────────────
-if "standings_tables" not in st.session_state:
-    st.session_state.standings_tables = None
-    st.session_state.standings_year   = None
+if "standings_dict" not in st.session_state:
+    st.session_state.standings_dict = None
+    st.session_state.standings_year = None
 
 # ── Carga ────────────────────────────────────────────────────────────────────
-if run_btn:
-    with st.spinner(f"Descargando standings {year}..."):
+if run_btn or st.session_state.standings_dict is None or st.session_state.standings_year != year:
+    with st.spinner(f"Cargando standings oficiales {year}..."):
         try:
-            st.session_state.standings_tables = fetcher.get_standings(year, force=force)
-            st.session_state.standings_year   = year
+            st.session_state.standings_dict = fetcher.get_standings(year, force=force)
+            st.session_state.standings_year = year
         except Exception as e:
-            st.error(f"❌ {e}")
+            st.error(f"❌ Error al cargar standings: {e}")
             st.stop()
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.title("🏆 MLB Standings")
+st.title("🏆 MLB Standings & Postseason Picture")
 
-if st.session_state.standings_tables is None:
+tables = st.session_state.standings_dict
+yr = st.session_state.standings_year
+
+if tables is None or not tables:
     st.info("👈 Selecciona la temporada y presiona **Cargar standings**.")
     st.stop()
 
-tables = st.session_state.standings_tables
-yr     = st.session_state.standings_year
-
 if yr >= _NOW_YEAR:
-    st.caption(f"Temporada **{yr}** — standings en curso · Fuente: Baseball Reference")
+    st.caption(f"Temporada **{yr}** — Posiciones en vivo · Fuente: MLB Stats API")
 else:
-    st.caption(f"Temporada **{yr}** (final) · Fuente: Baseball Reference")
+    st.caption(f"Temporada **{yr}** (finalizada) · Fuente: MLB Stats API")
 
 
-# ── Helper: limpiar tabla ────────────────────────────────────────────────────
-
-def _clean(df: pd.DataFrame) -> pd.DataFrame:
-    """Limpia y renombra columnas de la tabla de standings de BRef."""
-    df = df.copy()
-
-    # BRef a veces incluye filas de separación con guiones
-    if "Tm" in df.columns:
-        df = df[~df["Tm"].str.startswith("-", na=True)]
-        df = df[df["Tm"].notna() & (df["Tm"] != "Tm")]
-
-    # Columnas númericas
-    num_cols = ["W", "L", "GB", "RS", "RA", "Diff"]
-    for col in num_cols:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    # PCT
-    if "W-L%" in df.columns:
-        df["PCT"] = pd.to_numeric(df["W-L%"], errors="coerce").apply(
-            lambda v: f"{v:.3f}".lstrip("0") if pd.notna(v) and v < 1 else (f"{v:.3f}" if pd.notna(v) else "")
-        )
-        df = df.drop(columns=["W-L%"])
-
-    # Renombrar Tm → Team
-    if "Tm" in df.columns:
-        df = df.rename(columns={"Tm": "Team"})
-
-    # Ordenar columnas preferidas
-    preferred = ["Team", "W", "L", "PCT", "GB", "RS", "RA", "Diff", "Streak", "L10"]
-    cols = [c for c in preferred if c in df.columns]
-    extra = [c for c in df.columns if c not in cols]
-    df = df[cols + extra].reset_index(drop=True)
-    df.index += 1
-
-    return df
+def _format_table(df: pd.DataFrame, is_wc: bool = False) -> pd.DataFrame:
+    """Formatea la tabla de standings para display."""
+    if df.empty:
+        return df
+    out = df.copy()
+    if is_wc:
+        cols = ["Team", "W", "L", "PCT", "WC_GB", "RS", "RA", "Diff", "Streak", "L10"]
+    else:
+        cols = ["Team", "W", "L", "PCT", "GB", "RS", "RA", "Diff", "Streak", "L10"]
+    avail = [c for c in cols if c in out.columns]
+    out = out[avail].reset_index(drop=True)
+    out.index += 1
+    return out
 
 
-# ── Layout: AL arriba, NL abajo — 3 divisiones por fila ─────────────────────
-st.subheader(f"🏟️ American League — {yr}")
-al_cols = st.columns(3)
-for i, (div_name, _) in enumerate(DIVISIONS[:3]):
-    with al_cols[i]:
-        st.markdown(f"**{div_name}**")
-        if i < len(tables):
-            try:
-                st.dataframe(_clean(tables[i]), use_container_width=True, hide_index=False)
-            except Exception as e:
-                st.warning(f"No se pudo mostrar {div_name}: {e}")
+# ── Tabs de Visualización ──────────────────────────────────────────────────
+tab_div, tab_wc = st.tabs(["🏛️ Posiciones por División", "🎫 Carrera por el Comodín (Wild Card)"])
+
+with tab_div:
+    st.subheader(f"🏟️ American League — {yr}")
+    al_cols = st.columns(3)
+    for i, div_name in enumerate(DIVISIONS_AL):
+        with al_cols[i]:
+            st.markdown(f"**{div_name}**")
+            df_div = tables.get(div_name, pd.DataFrame())
+            if not df_div.empty:
+                st.dataframe(_format_table(df_div), use_container_width=True, hide_index=False)
+            else:
+                st.info("Sin datos.")
+
+    st.divider()
+
+    st.subheader(f"🏟️ National League — {yr}")
+    nl_cols = st.columns(3)
+    for i, div_name in enumerate(DIVISIONS_NL):
+        with nl_cols[i]:
+            st.markdown(f"**{div_name}**")
+            df_div = tables.get(div_name, pd.DataFrame())
+            if not df_div.empty:
+                st.dataframe(_format_table(df_div), use_container_width=True, hide_index=False)
+            else:
+                st.info("Sin datos.")
+
+with tab_wc:
+    st.subheader(f"🎫 Cuadro de Comodín (Wild Card) — {yr}")
+    st.caption("Los 3 mejores clasificados fuera de los campeones divisionales avanzan a la postemporada.")
+
+    wc_col1, wc_col2 = st.columns(2)
+
+    with wc_col1:
+        st.markdown("### 🏟️ AL Wild Card Standings")
+        al_all = []
+        for d in DIVISIONS_AL:
+            df_d = tables.get(d, pd.DataFrame())
+            if not df_d.empty:
+                # El líder divisional clasifica directo
+                al_all.append(df_d.iloc[1:].copy() if len(df_d) > 1 else df_d)
+        if al_all:
+            al_wc_df = pd.concat(al_all, ignore_index=True)
+            if "PCT" in al_wc_df.columns:
+                al_wc_df["pct_num"] = pd.to_numeric(al_wc_df["PCT"], errors="coerce").fillna(0)
+                al_wc_df = al_wc_df.sort_values("pct_num", ascending=False).drop(columns=["pct_num"])
+            st.dataframe(_format_table(al_wc_df, is_wc=True), use_container_width=True, height=500)
         else:
-            st.warning("Sin datos.")
+            st.info("Sin datos de AL.")
 
-st.divider()
-
-st.subheader(f"🏟️ National League — {yr}")
-nl_cols = st.columns(3)
-for i, (div_name, _) in enumerate(DIVISIONS[3:]):
-    with nl_cols[i]:
-        st.markdown(f"**{div_name}**")
-        idx = i + 3
-        if idx < len(tables):
-            try:
-                st.dataframe(_clean(tables[idx]), use_container_width=True, hide_index=False)
-            except Exception as e:
-                st.warning(f"No se pudo mostrar {div_name}: {e}")
+    with wc_col2:
+        st.markdown("### 🏟️ NL Wild Card Standings")
+        nl_all = []
+        for d in DIVISIONS_NL:
+            df_d = tables.get(d, pd.DataFrame())
+            if not df_d.empty:
+                nl_all.append(df_d.iloc[1:].copy() if len(df_d) > 1 else df_d)
+        if nl_all:
+            nl_wc_df = pd.concat(nl_all, ignore_index=True)
+            if "PCT" in nl_wc_df.columns:
+                nl_wc_df["pct_num"] = pd.to_numeric(nl_wc_df["PCT"], errors="coerce").fillna(0)
+                nl_wc_df = nl_wc_df.sort_values("pct_num", ascending=False).drop(columns=["pct_num"])
+            st.dataframe(_format_table(nl_wc_df, is_wc=True), use_container_width=True, height=500)
         else:
-            st.warning("Sin datos.")
+            st.info("Sin datos de NL.")

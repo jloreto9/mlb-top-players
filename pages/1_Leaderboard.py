@@ -1,10 +1,17 @@
 """
 pages/1_Leaderboard.py
-Leaderboard individual de bateadores y pitchers (FanGraphs via pybaseball).
+Leaderboard individual de bateadores y pitchers con soporte completo para Fantasy Baseball y Statcast.
 
-Tabs: Bateadores | Pitchers
-  Sub-tabs: Todos | AL | NL
-  Filtros: equipo (multiselect), min PA / min IP, SP/RP (pitchers)
+Vistas:
+- 📊 Estándar (Clásicas & Sabermétricas)
+- 🎯 Fantasy 5x5 (Z-Scores & Puntos)
+- ⚡ Statcast (xStats & Regresión)
+
+Filtros:
+- Liga: Todos | AL | NL
+- Posición de Fantasy (C, 1B, 2B, 3B, SS, OF, DH, SP, RP)
+- Equipo (Multiselect)
+- Filtro de volumen (Min PA / Min IP)
 """
 
 import sys
@@ -18,20 +25,25 @@ import streamlit as st
 import pandas as pd
 
 import fetcher
-from constants import TEAM_LEAGUE, BAT_COLS, PIT_COLS, LOWER_IS_BETTER
+import fantasy
+from constants import (
+    TEAM_LEAGUE, BAT_COLS, BAT_FANTASY_COLS, STATCAST_BAT_COLS,
+    PIT_COLS, PIT_FANTASY_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER,
+    FANTASY_SCORING_PRESETS
+)
 from utils import format_display, put_league_after_team
 
 # ── Config ─────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Leaderboard · MLB Stats",
+    page_title="Leaderboard & Fantasy · MLB Stats",
     page_icon="📊",
     layout="wide",
 )
 
 # ── Sidebar ────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("📊 Leaderboard")
-    st.caption("Fuente: FanGraphs via pybaseball")
+    st.title("📊 MLB Leaderboards")
+    st.caption("Analítica y Valoración Fantasy")
     st.divider()
 
     year = st.selectbox(
@@ -39,55 +51,59 @@ with st.sidebar:
         options=list(range(2026, 2009, -1)),
         index=1,
     )
+    
+    scoring_preset = st.selectbox(
+        "Sistema de Fantasy Points",
+        options=list(FANTASY_SCORING_PRESETS.keys()),
+        index=0,
+    )
+    
     force = st.checkbox("🔄 Forzar re-descarga", value=False)
     st.divider()
     run_btn = st.button("▶ Cargar datos", type="primary", use_container_width=True)
 
 # ── Session state ──────────────────────────────────────────────────────────
-for key in ("lb_bat", "lb_pit", "lb_year"):
+for key in ("lb_bat", "lb_pit", "lb_year", "lb_preset"):
     if key not in st.session_state:
         st.session_state[key] = None
 
 # ── Carga ──────────────────────────────────────────────────────────────────
-if run_btn:
-    with st.spinner(f"Descargando leaderboard {year}..."):
+if run_btn or (st.session_state.lb_bat is None and st.session_state.lb_year != year):
+    with st.spinner(f"Cargando leaderboard {year}..."):
         try:
-            st.session_state.lb_bat  = fetcher.batting(year, force=force)
-            st.session_state.lb_pit  = fetcher.pitching(year, force=force)
+            raw_bat = fetcher.batting(year, force=force)
+            raw_pit = fetcher.pitching(year, force=force)
+            
+            # Calcular capas de Fantasy y Statcast
+            st.session_state.lb_bat = fantasy.calculate_batting_fantasy(raw_bat, scoring_preset=scoring_preset)
+            st.session_state.lb_pit = fantasy.calculate_pitching_fantasy(raw_pit, scoring_preset=scoring_preset)
             st.session_state.lb_year = year
+            st.session_state.lb_preset = scoring_preset
         except Exception as e:
-            st.error(f"❌ {e}")
+            st.error(f"❌ Error al cargar datos: {e}")
             st.stop()
 
 # ── Header ─────────────────────────────────────────────────────────────────
-st.title("📊 Leaderboard Individual")
+st.title("📊 Leaderboard Individual & Fantasy Hub")
 
 if st.session_state.lb_bat is None:
     st.info("👈 Selecciona la temporada y presiona **Cargar datos**.")
     st.stop()
 
-yr      = st.session_state.lb_year
-bat_raw = st.session_state.lb_bat.copy()
-pit_raw = st.session_state.lb_pit.copy()
+yr = st.session_state.lb_year
+bat_df = st.session_state.lb_bat.copy()
+pit_df = st.session_state.lb_pit.copy()
 
 if yr >= datetime.now().year:
     st.warning(
-        f"⚠️ Los datos de **{yr}** son parciales — la temporada está en curso. "
-        "FanGraphs puede devolver datos del año anterior si aún hay poca data. "
-        "Selecciona **2025** para ver una temporada completa."
+        f"⚠️ Temporada **{yr}** en curso. "
+        "Selecciona **2025** para analizar una temporada completa consolidada."
     )
 else:
-    st.caption(f"Temporada **{yr}** · Fuente: FanGraphs")
+    st.caption(f"Temporada **{yr}** · Scoring: **{st.session_state.lb_preset}**")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
-
-def _add_league(df: pd.DataFrame, col: str = "Team") -> pd.DataFrame:
-    df = df.copy()
-    if col in df.columns:
-        df["League"] = df[col].str.upper().map(TEAM_LEAGUE).fillna("UNK")
-    return df
-
 
 def _avail(df: pd.DataFrame, cols: list[str]) -> list[str]:
     return [c for c in cols if c in df.columns]
@@ -99,6 +115,12 @@ def _team_options(df: pd.DataFrame) -> list[str]:
     return sorted(df["Team"].dropna().unique().tolist())
 
 
+def _pos_options(df: pd.DataFrame) -> list[str]:
+    if "Pos" not in df.columns:
+        return []
+    return sorted(df["Pos"].dropna().unique().tolist())
+
+
 def _show_leaderboard(
     df: pd.DataFrame,
     cols: list[str],
@@ -106,21 +128,9 @@ def _show_leaderboard(
     min_col: str | None = None,
     min_label: str = "Min PA",
     min_default: int = 50,
-    extra_filters: bool = False,
+    is_pitcher: bool = False,
 ) -> None:
-    """
-    Muestra filtros + tabla sorteable para un subconjunto del leaderboard.
-
-    Parametros
-    ----------
-    df           : DataFrame ya filtrado por liga (o sin filtro si es 'Todos')
-    cols         : columnas deseadas (se intersecta con las disponibles)
-    prefix       : clave unica para los widgets de Streamlit
-    min_col      : columna para el filtro de volumen (PA o IP)
-    min_label    : etiqueta del filtro de volumen
-    min_default  : valor por defecto del filtro
-    extra_filters: si True muestra filtro SP/RP (solo para pitchers)
-    """
+    """Muestra filtros interactivos (equipos, posiciones, volumen) y tabla sorteable."""
     if df.empty:
         st.warning("Sin datos para este filtro.")
         return
@@ -141,6 +151,16 @@ def _show_leaderboard(
         )
 
     with fc2:
+        pos_list = _pos_options(df)
+        sel_pos = st.multiselect(
+            "Posición",
+            options=pos_list,
+            default=[],
+            placeholder="Todas las posiciones",
+            key=f"pos_{prefix}",
+        )
+
+    with fc3:
         if min_col and min_col in df.columns:
             col_max = int(pd.to_numeric(df[min_col], errors="coerce").max() or 700)
             safe_default = min(min_default, col_max)
@@ -155,25 +175,17 @@ def _show_leaderboard(
         else:
             min_val = 0
 
-    with fc3:
-        if extra_filters and "GS" in df.columns and "G" in df.columns:
-            role = st.radio(
-                "Rol",
-                options=["Todos", "SP", "RP"],
-                horizontal=True,
-                key=f"role_{prefix}",
-            )
-        else:
-            role = "Todos"
-
     # ── Controles de orden ─────────────────────────────────────────────────
     sc1, sc2 = st.columns([3, 1])
-    sort_options = [c for c in avail if c not in ("Name", "Team", "League")]
+    sort_options = [c for c in avail if c not in ("Name", "Team", "League", "Pos")]
+
+    default_sort = "WAR" if "WAR" in sort_options else ("Fantasy_Pts" if "Fantasy_Pts" in sort_options else sort_options[0])
 
     with sc1:
         sort_col = st.selectbox(
             "Ordenar por",
             options=sort_options,
+            index=sort_options.index(default_sort) if default_sort in sort_options else 0,
             key=f"sort_{prefix}",
         )
     with sc2:
@@ -182,7 +194,7 @@ def _show_leaderboard(
             "↑ Asc",
             value=asc_default,
             key=f"asc_{prefix}",
-            help="Menor primero",
+            help="Menor primero (ERA, WHIP, etc.)",
         )
 
     # ── Aplicar filtros ────────────────────────────────────────────────────
@@ -191,24 +203,16 @@ def _show_leaderboard(
     if sel_teams:
         filtered = filtered[filtered["Team"].isin(sel_teams)]
 
+    if sel_pos:
+        filtered = filtered[filtered["Pos"].isin(sel_pos)]
+
     if min_col and min_col in filtered.columns and min_val > 0:
         filtered = filtered[
             pd.to_numeric(filtered[min_col], errors="coerce") >= min_val
         ]
 
-    if role == "SP" and "GS" in filtered.columns and "G" in filtered.columns:
-        filtered = filtered[
-            pd.to_numeric(filtered["GS"], errors="coerce")
-            >= pd.to_numeric(filtered["G"], errors="coerce") * 0.5
-        ]
-    elif role == "RP" and "GS" in filtered.columns and "G" in filtered.columns:
-        filtered = filtered[
-            pd.to_numeric(filtered["GS"], errors="coerce")
-            < pd.to_numeric(filtered["G"], errors="coerce") * 0.5
-        ]
-
     if filtered.empty:
-        st.warning("Sin jugadores con estos filtros.")
+        st.warning("Sin jugadores con los filtros seleccionados.")
         return
 
     # ── Tabla ──────────────────────────────────────────────────────────────
@@ -225,35 +229,49 @@ def _show_leaderboard(
         format_display(sorted_df),
         use_container_width=True,
         hide_index=False,
-        height=600,
+        height=620,
     )
-    st.caption(f"{len(sorted_df)} jugadores")
+    st.caption(f"Mostrando **{len(sorted_df)}** jugadores · Ordenado por **{sort_col}** ({'Ascendente' if ascending else 'Descendente'})")
 
 
-def _show_by_league(
+def _render_player_section(
     df: pd.DataFrame,
-    cols: list[str],
+    standard_cols: list[str],
+    fantasy_cols: list[str],
+    statcast_cols: list[str],
     prefix: str,
-    min_col: str | None = None,
-    min_label: str = "Min PA",
-    min_default: int = 50,
-    extra_filters: bool = False,
+    min_col: str,
+    min_label: str,
+    min_default: int,
+    is_pitcher: bool = False,
 ) -> None:
-    """Sub-tabs Todos | AL | NL."""
-    df = _add_league(df)
-    cols_with_league = cols + (["League"] if "League" not in cols else [])
+    """Renderiza los sub-tabs de Liga y el selector de Vistas."""
+    v1, v2 = st.columns([2, 4])
+    with v1:
+        view_mode = st.radio(
+            "Seleccionar Vista",
+            options=["📊 Estándar / Sabermetría", "🎯 Fantasy (Z-Scores & Puntos)", "⚡ Statcast & Calidad de Contacto"],
+            horizontal=True,
+            key=f"view_mode_{prefix}",
+        )
 
-    all_t, al_t, nl_t = st.tabs(["🌐 Todos", "🏟️ AL", "🏟️ NL"])
+    if view_mode == "🎯 Fantasy (Z-Scores & Puntos)":
+        active_cols = fantasy_cols
+    elif view_mode == "⚡ Statcast & Calidad de Contacto":
+        active_cols = statcast_cols
+    else:
+        active_cols = standard_cols
+
+    cols_with_league = active_cols + (["League"] if "League" not in active_cols else [])
+
+    all_t, al_t, nl_t = st.tabs(["🌐 Toda la MLB", "🏟️ Liga Americana (AL)", "🏟️ Liga Nacional (NL)"])
 
     with all_t:
-        _show_leaderboard(df, cols_with_league, f"{prefix}_all",
-                          min_col, min_label, min_default, extra_filters)
+        _show_leaderboard(df, cols_with_league, f"{prefix}_all", min_col, min_label, min_default, is_pitcher)
     with al_t:
-        _show_leaderboard(df[df["League"] == "AL"].copy(), cols_with_league,
-                          f"{prefix}_al", min_col, min_label, min_default, extra_filters)
+        _show_leaderboard(df[df["League"] == "AL"].copy(), cols_with_league, f"{prefix}_al", min_col, min_label, min_default, is_pitcher)
     with nl_t:
-        _show_leaderboard(df[df["League"] == "NL"].copy(), cols_with_league,
-                          f"{prefix}_nl", min_col, min_label, min_default, extra_filters)
+        _show_leaderboard(df[df["League"] == "NL"].copy(), cols_with_league, f"{prefix}_nl", min_col, min_label, min_default, is_pitcher)
 
 
 # ── Tabs principales ───────────────────────────────────────────────────────
@@ -261,24 +279,29 @@ bat_tab, pit_tab = st.tabs(["🏏 Bateadores", "⚡ Pitchers"])
 
 with bat_tab:
     st.subheader(f"Bateadores — {yr}")
-    _show_by_league(
-        bat_raw,
-        BAT_COLS,
+    _render_player_section(
+        bat_df,
+        standard_cols=BAT_COLS,
+        fantasy_cols=BAT_FANTASY_COLS,
+        statcast_cols=STATCAST_BAT_COLS,
         prefix="bat",
         min_col="PA",
         min_label="Min PA",
         min_default=50,
-        extra_filters=False,
+        is_pitcher=False,
     )
 
 with pit_tab:
     st.subheader(f"Pitchers — {yr}")
-    _show_by_league(
-        pit_raw,
-        PIT_COLS,
+    _render_player_section(
+        pit_df,
+        standard_cols=PIT_COLS,
+        fantasy_cols=PIT_FANTASY_COLS,
+        statcast_cols=STATCAST_PIT_COLS,
         prefix="pit",
         min_col="IP",
         min_label="Min IP",
         min_default=20,
-        extra_filters=True,
+        is_pitcher=True,
     )
+

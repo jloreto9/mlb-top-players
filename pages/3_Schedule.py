@@ -1,7 +1,7 @@
 """
 pages/3_Schedule.py
-Schedule y record por equipo — Baseball Reference via pybaseball.
-Muestra partidos jugados (resultado, score, pitchers) y próximos juegos.
+Schedule y resultados por equipo vía MLB Stats API oficial.
+Muestra partidos jugados (resultado, score, pitchers de decisión) y próximos juegos con lanzadores abridores probables.
 """
 
 import sys
@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import streamlit as st
 import pandas as pd
 
-from pybaseball import schedule_and_record
+import fetcher
+from constants import MLB_TEAMS
 
 st.set_page_config(
     page_title="Schedule · MLB Stats",
@@ -21,58 +22,22 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Equipos (abreviatura BRef → nombre completo) ───────────────────────────
-TEAMS = {
-    # AL East
-    "BAL": "Baltimore Orioles",
-    "BOS": "Boston Red Sox",
-    "NYY": "New York Yankees",
-    "TBR": "Tampa Bay Rays",
-    "TOR": "Toronto Blue Jays",
-    # AL Central
-    "CHW": "Chicago White Sox",
-    "CLE": "Cleveland Guardians",
-    "DET": "Detroit Tigers",
-    "KCR": "Kansas City Royals",
-    "MIN": "Minnesota Twins",
-    # AL West
-    "HOU": "Houston Astros",
-    "LAA": "Los Angeles Angels",
-    "OAK": "Oakland Athletics",
-    "SEA": "Seattle Mariners",
-    "TEX": "Texas Rangers",
-    # NL East
-    "ATL": "Atlanta Braves",
-    "MIA": "Miami Marlins",
-    "NYM": "New York Mets",
-    "PHI": "Philadelphia Phillies",
-    "WSN": "Washington Nationals",
-    # NL Central
-    "CHC": "Chicago Cubs",
-    "CIN": "Cincinnati Reds",
-    "MIL": "Milwaukee Brewers",
-    "PIT": "Pittsburgh Pirates",
-    "STL": "St. Louis Cardinals",
-    # NL West
-    "ARI": "Arizona Diamondbacks",
-    "COL": "Colorado Rockies",
-    "LAD": "Los Angeles Dodgers",
-    "SDP": "San Diego Padres",
-    "SFG": "San Francisco Giants",
-}
-
 _NOW_YEAR = datetime.now().year
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("📅 Schedule")
-    st.caption("Fuente: Baseball Reference via pybaseball")
+    st.caption("Fuente: MLB Stats API Oficial")
     st.divider()
 
+    # Obtener lista única de equipos ordenados
+    team_keys = sorted(list(set(MLB_TEAMS.keys())))
+    
     team_label = st.selectbox(
         "Equipo",
-        options=list(TEAMS.keys()),
-        format_func=lambda k: f"{k} — {TEAMS[k]}",
+        options=team_keys,
+        format_func=lambda k: f"{k} — {MLB_TEAMS[k]}",
+        index=team_keys.index("NYY") if "NYY" in team_keys else 0,
     )
     year = st.selectbox(
         "Temporada",
@@ -89,83 +54,55 @@ for k in ("sched_df", "sched_team", "sched_year"):
         st.session_state[k] = None
 
 # ── Carga ─────────────────────────────────────────────────────────────────────
-if run_btn:
-    if force:
-        # Limpiar cache de pybaseball para este equipo/año
-        from pybaseball import cache as pybb_cache
-        pybb_cache.purge()
-
-    with st.spinner(f"Descargando schedule {TEAMS[team_label]} {year}..."):
+if run_btn or st.session_state.sched_df is None or st.session_state.sched_team != team_label or st.session_state.sched_year != year:
+    with st.spinner(f"Cargando calendario {MLB_TEAMS.get(team_label, team_label)} {year}..."):
         try:
-            df = schedule_and_record(year, team_label)
-            st.session_state.sched_df   = df
+            df = fetcher.get_team_schedule(year, team_label)
+            st.session_state.sched_df = df
             st.session_state.sched_team = team_label
             st.session_state.sched_year = year
         except Exception as e:
-            st.error(f"❌ {e}")
+            st.error(f"❌ Error cargando schedule: {e}")
             st.stop()
 
 # ── Header ────────────────────────────────────────────────────────────────────
-st.title("📅 Schedule por Equipo")
+st.title("📅 Calendario & Resultados por Equipo")
 
-if st.session_state.sched_df is None:
+if st.session_state.sched_df is None or st.session_state.sched_df.empty:
     st.info("👈 Selecciona el equipo y la temporada, luego presiona **Cargar schedule**.")
     st.stop()
 
-df   = st.session_state.sched_df.copy()
+df = st.session_state.sched_df.copy()
 team = st.session_state.sched_team
-yr   = st.session_state.sched_year
+yr = st.session_state.sched_year
 
-st.subheader(f"{TEAMS[team]} ({team}) — {yr}")
+st.subheader(f"🏟️ {MLB_TEAMS.get(team, team)} ({team}) — Temporada {yr}")
 
-# ── Limpieza y split pasados/futuros ─────────────────────────────────────────
-
-# Normalizar columna W/L (puede llamarse W/L o similar)
-wl_col = next((c for c in df.columns if c in ("W/L", "Unnamed: 5", "Result")), None)
-
-# Juegos jugados: tienen resultado (W, L, W-wo, L-wo, T)
-played_mask = df.get(wl_col, pd.Series(dtype=str)).str.match(r"^[WLT]", na=False) if wl_col else pd.Series([False]*len(df))
-played = df[played_mask].copy()
-upcoming = df[~played_mask].copy()
+# ── Split pasados / futuros ─────────────────────────────────────────────────
+played = df[df["Res"].isin(["W", "L", "T"])].copy()
+upcoming = df[~df["Res"].isin(["W", "L", "T"])].copy()
 
 # ── Resumen de record ──────────────────────────────────────────────────────
-if not played.empty and wl_col:
-    wins   = played[wl_col].str.startswith("W").sum()
-    losses = played[wl_col].str.startswith("L").sum()
-    ties   = played[wl_col].str.startswith("T").sum()
+if not played.empty:
+    wins = (played["Res"] == "W").sum()
+    losses = (played["Res"] == "L").sum()
+    ties = (played["Res"] == "T").sum()
 
-    r_col  = next((c for c in played.columns if c == "R"), None)
-    ra_col = next((c for c in played.columns if c == "RA"), None)
+    rs = pd.to_numeric(played["R"], errors="coerce").sum()
+    ra = pd.to_numeric(played["RA"], errors="coerce").sum()
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Record",  f"{wins}-{losses}" + (f"-{ties}" if ties else ""))
-    m2.metric("Jugados", len(played))
-    if r_col and ra_col:
-        rs  = pd.to_numeric(played[r_col],  errors="coerce").sum()
-        ra  = pd.to_numeric(played[ra_col], errors="coerce").sum()
-        m3.metric("Carreras Anotadas", int(rs))
-        m4.metric("Dif. Carreras",     f"{int(rs - ra):+d}")
+    m1.metric("Récord W-L", f"{wins}-{losses}" + (f"-{ties}" if ties else ""))
+    m2.metric("Juegos Jugados", len(played))
+    m3.metric("Carreras Anotadas", int(rs))
+    m4.metric("Diferencial", f"{int(rs - ra):+d}")
 
 st.divider()
 
 # ── Columnas de display ────────────────────────────────────────────────────
-PLAYED_COLS   = ["Date", "Tm", "Home_Away", "Opp", wl_col, "R", "RA",
-                 "Win", "Loss", "Save", "Inn", "Attendance", "Streak", "Rank", "GB"]
-UPCOMING_COLS = ["Date", "Tm", "Home_Away", "Opp", "Time", "D/N"]
+PLAYED_COLS = ["Date", "Home_Away", "Opp", "Res", "R", "RA", "Pitcher_W", "Pitcher_L", "Save", "Status"]
+UPCOMING_COLS = ["Date", "Home_Away", "Opp", "SP_Opp", "Status"]
 
-def _sel(df, cols):
-    return df[[c for c in cols if c and c in df.columns]]
-
-def _rename(df):
-    return df.rename(columns={
-        "Tm": "Equipo", "Home_Away": "L/V", "Opp": "Rival",
-        wl_col: "Res", "R": "R", "RA": "RA",
-        "Win": "Pitcher W", "Loss": "Pitcher L", "Save": "Save",
-        "Inn": "Inn", "Attendance": "Asistencia",
-        "Streak": "Racha", "Rank": "Pos", "GB": "GB",
-    })
-
-# ── Colorear resultado ──────────────────────────────────────────────────────
 def _color_row(row):
     res = str(row.get("Res", ""))
     if res.startswith("W"):
@@ -174,7 +111,7 @@ def _color_row(row):
         return ["background-color: #3a1a1a; color: #ff7d7d"] * len(row)
     return [""] * len(row)
 
-# ── Tab: Jugados | Próximos ───────────────────────────────────────────────
+# ── Tabs: Jugados | Próximos ───────────────────────────────────────────────
 played_tab, upcoming_tab = st.tabs([
     f"✅ Jugados ({len(played)})",
     f"🗓️ Próximos ({len(upcoming)})",
@@ -182,22 +119,20 @@ played_tab, upcoming_tab = st.tabs([
 
 with played_tab:
     if played.empty:
-        st.info("Aún no hay juegos jugados.")
+        st.info("Aún no hay juegos completados en esta temporada.")
     else:
-        display = _rename(_sel(played, PLAYED_COLS)).reset_index(drop=True)
-        display.index += 1
-
+        disp_p = played[[c for c in PLAYED_COLS if c in played.columns]].reset_index(drop=True)
         # Mostrar los más recientes primero
-        display_rev = display.iloc[::-1].reset_index(drop=True)
-        display_rev.index = range(len(display_rev), 0, -1)
-
-        styled = display_rev.style.apply(_color_row, axis=1)
+        disp_p_rev = disp_p.iloc[::-1].reset_index(drop=True)
+        disp_p_rev.index += 1
+        styled = disp_p_rev.style.apply(_color_row, axis=1)
         st.dataframe(styled, use_container_width=True, height=600)
 
 with upcoming_tab:
     if upcoming.empty:
-        st.success("No quedan juegos por jugar (temporada finalizada).")
+        st.success("Temporada finalizada — No quedan juegos por disputar.")
     else:
-        display = _rename(_sel(upcoming, UPCOMING_COLS)).reset_index(drop=True)
-        display.index += 1
-        st.dataframe(display, use_container_width=True, height=600)
+        disp_u = upcoming[[c for c in UPCOMING_COLS if c in upcoming.columns]].reset_index(drop=True)
+        disp_u.index += 1
+        st.dataframe(disp_u, use_container_width=True, height=600)
+

@@ -1,79 +1,83 @@
-# ⚾ MLB Top Players por Liga
+# ⚾ MLB Intelligence & Fantasy Baseball Suite
 
-Aplicación Streamlit que rankea los mejores bateadores y pitchers de MLB por liga (AL / NL) usando datos **pitch-by-pitch de Statcast (Baseball Savant)**.
+Aplicación analítica integral en **Streamlit** para análisis avanzado de Grandes Ligas (MLB) y toma de decisiones estratégicas en **Fantasy Baseball** (Yahoo, ESPN, Fantrax, CBS, NFBC).
 
-## Métricas principales
+Combina la **MLB Stats API oficial** (`statsapi.mlb.com`), métricas sabermétricas de **FanGraphs** y datos de calidad de contacto de **Statcast**.
 
-| Grupo | Métrica | Descripción |
-|---|---|---|
-| Bateadores | **xwOBA** | Calidad de contacto esperada (exit velocity + launch angle) |
-| Bateadores | xBA, xSLG, AVG, OBP, SLG, OPS, K%, BB%, HR | Complementarias |
-| Pitchers | **xERA** | ERA esperado por calidad de contacto permitido |
-| Pitchers | ERA~, WHIP, K/9, BB/9, K%, BB%, velo, spin | Complementarias |
+---
 
-> **Nota:** `ERA~` es una aproximación via diferencial de score, no ERA oficial.  
-> `xERA` usa la fórmula aproximada de Baseball Savant: `(xwOBA_against - 0.100) / 0.140 * 9`.
+## 🎯 Módulos Principales
 
-## Estructura del proyecto
+### 1. 📊 Leaderboards & Valoración Fantasy (`pages/1_Leaderboard.py`)
+- **Vistas dinámicas**:
+  - **Estándar**: AVG, OBP, SLG, OPS, wOBA, wRC+, WAR, ERA, FIP, xFIP, K/9, BB/9.
+  - **Fantasy 5x5**: Z-Scores por categoría ($z_R, z_{HR}, z_{RBI}, z_{SB}, z_{AVG}$ y $z_W, z_{SV}, z_{SO}, z_{ERA}, z_{WHIP}$), ranking general (`Fantasy_Rank`) y puntos totales (`Fantasy_Pts`).
+  - **Statcast**: Métricas esperadas ($xBA, xSLG, xwOBA, xERA$), diferenciales de regresión, HardHit% y Barrel%.
+- **Filtros por Posición de Fantasy**: C, 1B, 2B, 3B, SS, OF, DH, SP, RP (obtenidos directamente de los rosters oficiales de MLB).
+- **Filtros de Liga y Equipo**: AL, NL, Toda la MLB y selección de equipos individuales.
+
+### 2. 🎯 Fantasy Intelligence Hub (`pages/4_Fantasy_Hub.py`)
+- **🔍 Statcast Buy-Low / Sell-High**: Detector de jugadores con mala suerte estadística (candidatos a repuntar / comprar barato) vs sobre-rendimiento no sostenible.
+- **📅 SP Streamer & Matchup Planner**: Planificador de abridores para la semana con evaluación automática del talento del lanzador, wRC+ del rival y factor de parque (Streamer Score de 1 a 100), con alertas de lanzadores de doble apertura (**Two-Start Pitchers**).
+- **🔒 Bullpen & Closer Depth Chart**: Monitoreo de jerarquías en los 30 bullpens (Cerradores titulares, Setup de 8va entrada, comités y sleepers de salvamentos/holds).
+- **⚖️ Comparador Cara a Cara & Trade Analyzer**: Comparador visual y estadístico entre 2 a 4 jugadores para evaluar alineaciones y trades.
+
+### 3. 🏆 Standings & Postseason Picture (`pages/2_Standings.py`)
+- Posiciones oficiales en vivo por división (AL / NL East, Central, West).
+- Tabla de **Wild Card (Comodín)** con la carrera por los 3 cupos a la postemporada.
+
+### 4. 📅 Calendario & Schedule por Equipo (`pages/3_Schedule.py`)
+- Historial de partidos disputados con resultados, lanzadores ganadores/perdedores y salvamentos.
+- Calendario de juegos futuros con **lanzadores abridores probables**.
+
+### 5. 📊 Estadísticas Colectivas (`app.py`)
+- Dashboard ejecutivo con líderes de la temporada y comparativas colectivas por equipo (Bateo, Pitcheo y Fildeo) con gráficos interactivos de Plotly.
+
+---
+
+## 🏗️ Estructura del Proyecto
 
 ```
 mlb_stats/
-├── app.py           # Streamlit UI
-├── main.py          # Pipeline principal (importable)
-├── fetcher.py       # Descarga Statcast + caché Parquet
-├── calculator.py    # Cálculo de métricas por jugador
-├── ranker.py        # Asignación AL/NL + Top N
-├── requirements.txt
-└── README.md
+├── app.py                      # Dashboard Principal y Estadísticas Colectivas
+├── constants.py                # Mapeos de equipos, factores de parque, columnas y presets de Fantasy
+├── fantasy.py                  # Motor de Z-Scores 5x5, Puntos Fantasy, Regresión Statcast y SP Streaming
+├── fetcher.py                  # Cliente MLB Stats API oficial + FanGraphs con caché Parquet/JSON
+├── utils.py                    # Formateo visual numérico (slash stats, %, z-scores, diferenciales)
+├── pages/
+│   ├── 1_Leaderboard.py        # Leaderboards individuales con filtros de posición y vistas Fantasy
+│   ├── 2_Standings.py          # Standings por división y Wild Card oficial
+│   ├── 3_Schedule.py           # Calendario por equipo con abridores probables
+│   └── 4_Fantasy_Hub.py        # Hub de Fantasy (Buy-Low/Sell-High, SP Streamer, Bullpen, Trade Analyzer)
+├── cache/                      # Almacenamiento local en Parquet y JSON
+├── scripts/
+│   └── refresh_cache.py        # Script de actualización programada de datos
+├── requirements.txt            # Dependencias del proyecto
+└── README.md                   # Documentación técnica
 ```
 
-## Instalación local
+---
+
+## 🚀 Instalación y Uso Local
 
 ```bash
-git clone https://github.com/TU_USUARIO/mlb-top-players.git
-cd mlb-top-players
+# 1. Clonar el repositorio
+git clone https://github.com/TU_USUARIO/mlb_stats.git
+cd mlb_stats
 
+# 2. Instalar dependencias
 pip install -r requirements.txt
 
+# 3. Ejecutar la aplicación Streamlit
 streamlit run app.py
 ```
 
-## Deploy en Streamlit Cloud
+---
 
-1. Sube el repositorio a GitHub (rama `main`)
-2. Ve a [share.streamlit.io](https://share.streamlit.io)
-3. Conecta tu repo y apunta el **Main file** a `app.py`
-4. Deploy
+## 🌐 Despliegue en Streamlit Community Cloud
 
-> Streamlit Cloud instala automáticamente las dependencias de `requirements.txt`.
+1. Sube el repositorio a GitHub (rama `main`).
+2. Ve a [share.streamlit.io](https://share.streamlit.io).
+3. Conecta tu repositorio seleccionando `app.py` como **Main file**.
+4. ¡Listo! La suite se desplegará automáticamente.
 
-## Uso
-
-1. Selecciona el **rango de fechas** en el sidebar
-2. Ajusta **Top N**, **min PA** y **min BF**
-3. Presiona **▶ Ejecutar**
-4. Navega entre tabs **Bateadores** / **Pitchers** → sub-tabs **AL** / **NL**
-
-### Caché local
-
-La primera descarga de Statcast puede tardar varios minutos dependiendo del rango.  
-Los datos se guardan en `cache/` como Parquet para ejecuciones posteriores.  
-Usa **🔄 Forzar re-descarga** para refrescar.
-
-> En Streamlit Cloud el caché es efímero (se borra al reiniciar la app).
-
-## Advertencias
-
-- La **asignación AL/NL** usa `home_team` del juego como proxy — muy preciso en temporada completa, con posible ruido en rangos cortos
-- Sin filtro mínimo de PA/BF aparecen jugadores con muestras pequeñas y métricas extremas
-- Statcast tiene datos desde **2015**
-
-## Dependencias
-
-```
-pybaseball>=2.2.7
-pandas>=2.0.0
-numpy>=1.24.0
-pyarrow>=14.0.0
-streamlit>=1.32.0
-```
