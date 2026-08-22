@@ -44,18 +44,20 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Solo stagear los parquets de FanGraphs (bat, pit, tbat, tpit)
-          git add cache/bat_*.parquet   2>/dev/null || true
-          git add cache/pit_*.parquet   2>/dev/null || true
-          git add cache/tbat_*.parquet  2>/dev/null || true
-          git add cache/tpit_*.parquet  2>/dev/null || true
+          # Stagear parquets de FanGraphs, Statcast y JSONs de MLB
+          git add cache/bat_*.parquet        2>/dev/null || true
+          git add cache/pit_*.parquet        2>/dev/null || true
+          git add cache/tbat_*.parquet       2>/dev/null || true
+          git add cache/tpit_*.parquet       2>/dev/null || true
+          git add cache/statcast_*.parquet   2>/dev/null || true
+          git add cache/*.json               2>/dev/null || true
 
           # Commit solo si hay cambios
           if git diff --staged --quiet; then
             echo "No hay cambios en el cache. Nada que commitear."
           else
             DATE=$(date -u '+%Y-%m-%d %H:%M UTC')
-            git commit -m "chore: refresh FanGraphs cache [$DATE]"
+            git commit -m "chore: refresh FanGraphs & Statcast cache [$DATE]"
             git push
             echo "Cache actualizado y pusheado."
           fi

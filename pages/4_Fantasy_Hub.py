@@ -111,9 +111,10 @@ with tab_buy_sell:
         st.caption("Tienen métricas Statcast superiores a sus números tradicionales (xwOBA > wOBA).")
         buy_bat = reg_dict["bat_buy_low"]
         if not buy_bat.empty:
-            cols = ["Name", "Team", "Pos", "PA", "AVG", "xBA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
+            cols = ["Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
             disp_cols = [c for c in cols if c in buy_bat.columns]
-            st.dataframe(format_display(buy_bat[disp_cols].head(25)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(buy_bat[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.download_button("📥 Descargar Bateadores Buy-Low (CSV)", data=buy_bat[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"buy_low_batting_{year}.csv", mime="text/csv")
         else:
             st.info("No hay candidatos suficientes con el filtro actual.")
 
@@ -122,9 +123,10 @@ with tab_buy_sell:
         st.caption("Están sobre-rindiendo su calidad real de contacto (wOBA > xwOBA).")
         sell_bat = reg_dict["bat_sell_high"]
         if not sell_bat.empty:
-            cols = ["Name", "Team", "Pos", "PA", "AVG", "xBA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
+            cols = ["Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
             disp_cols = [c for c in cols if c in sell_bat.columns]
-            st.dataframe(format_display(sell_bat[disp_cols].head(25)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(sell_bat[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.download_button("📥 Descargar Bateadores Sell-High (CSV)", data=sell_bat[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"sell_high_batting_{year}.csv", mime="text/csv")
         else:
             st.info("No hay candidatos suficientes con el filtro actual.")
 
@@ -136,9 +138,10 @@ with tab_buy_sell:
         st.caption("Tienen una ERA más alta que su xERA / SIERA pero mantienen buen Stuff/K%.")
         buy_pit = reg_dict["pit_buy_low"]
         if not buy_pit.empty:
-            cols = ["Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "K%", "BB%"]
+            cols = ["Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "SO", "K%", "BB%"]
             disp_cols = [c for c in cols if c in buy_pit.columns]
-            st.dataframe(format_display(buy_pit[disp_cols].head(25)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(buy_pit[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.download_button("📥 Descargar Pitchers Buy-Low (CSV)", data=buy_pit[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"buy_low_pitching_{year}.csv", mime="text/csv")
         else:
             st.info("Sin candidatos.")
 
@@ -147,9 +150,10 @@ with tab_buy_sell:
         st.caption("Tienen una ERA baja pero su contacto permitido (xERA) predice regresión negativa.")
         sell_pit = reg_dict["pit_sell_high"]
         if not sell_pit.empty:
-            cols = ["Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "K%", "BB%"]
+            cols = ["Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "SO", "K%", "BB%"]
             disp_cols = [c for c in cols if c in sell_pit.columns]
-            st.dataframe(format_display(sell_pit[disp_cols].head(25)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(sell_pit[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.download_button("📥 Descargar Pitchers Sell-High (CSV)", data=sell_pit[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"sell_high_pitching_{year}.csv", mime="text/csv")
         else:
             st.info("Sin candidatos.")
 
@@ -188,9 +192,9 @@ with tab_streamer:
 
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Juegos Programados", len(eval_sp))
-            m2.metric("⭐ Pitchers 2-Starts", two_starts)
-            m3.metric("🟢 Must-Starts", must_starts)
-            m4.metric("🟢 Buenos Streams", good_streams)
+            m2.metric("Lanzadores 2-Starts ⭐", two_starts)
+            m3.metric("Must-Start 🟢", must_starts)
+            m4.metric("Buen Stream 🟢", good_streams)
 
             st.divider()
 
@@ -202,7 +206,7 @@ with tab_streamer:
                     default=["🟢 Must-Start", "🟢 Buen Stream", "🟡 Opcional / Riesgo"],
                 )
             with fc2:
-                only_two_starts = st.checkbox("Mostrar solo Two-Start Pitchers (⭐)", value=False)
+                only_two_starts = st.checkbox("Mostrar únicamente lanzadores de doble salida (⭐ 2-Starts)", value=False)
 
             filtered_sp = eval_sp.copy()
             if verdict_filter:
@@ -211,6 +215,7 @@ with tab_streamer:
                 filtered_sp = filtered_sp[filtered_sp["Two_Start"] == "⭐ 2-Starts"]
 
             st.dataframe(format_display(filtered_sp), use_container_width=True, height=550, hide_index=True)
+            st.download_button("📥 Descargar Planificador de Abridores (CSV)", data=filtered_sp.to_csv(index=False).encode('utf-8'), file_name=f"sp_streamer_{s_date}_{e_date}.csv", mime="text/csv")
         else:
             st.info("No se encontraron partidos o abridores programados para el rango de fechas seleccionado.")
 
@@ -234,6 +239,7 @@ with tab_bullpen:
 
         f_bp = bp_df[bp_df["Team"].isin(tm_sel)] if tm_sel else bp_df
         st.dataframe(format_display(f_bp), use_container_width=True, height=600, hide_index=True)
+        st.download_button("📥 Descargar Jerarquías de Bullpen (CSV)", data=f_bp.to_csv(index=False).encode('utf-8'), file_name=f"bullpen_depth_chart_{year}.csv", mime="text/csv")
     else:
         st.info("Sin datos suficientes de bullpen.")
 

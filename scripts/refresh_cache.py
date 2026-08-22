@@ -25,21 +25,39 @@ import fetcher
 
 def refresh(year: int) -> None:
     print(f"\n{'='*50}")
-    print(f"  Refreshing stats: {year}")
+    print(f"  Refreshing stats & Statcast: {year}")
     print(f"{'='*50}")
 
-    # Críticos: Baseball Reference — accesibles desde CI
+    # 1. Metadatos oficiales de MLB
+    try:
+        pos = fetcher.get_player_positions(year, force=True)
+        print(f"  [OK] player_positions: {len(pos):,} jugadores")
+    except Exception as e:
+        print(f"  [WARN] player_positions: {e} (omitido)", file=sys.stderr)
+
+    try:
+        std = fetcher.get_standings(year, force=True)
+        print(f"  [OK] standings: {len(std)} divisiones")
+    except Exception as e:
+        print(f"  [WARN] standings: {e} (omitido)", file=sys.stderr)
+
+    # 2. Statcast Expected Stats (Baseball Savant)
+    statcast_tasks = [
+        ("statcast_batting",  lambda: fetcher.statcast_batting(year, force=True)),
+        ("statcast_pitching", lambda: fetcher.statcast_pitching(year, force=True)),
+    ]
+    for name, fn in statcast_tasks:
+        try:
+            df = fn()
+            print(f"  [OK] {name}: {len(df):,} filas")
+        except Exception as e:
+            print(f"  [WARN] {name}: {type(e).__name__}: {e} (omitido)", file=sys.stderr)
+
+    # 3. Leaderboards de Bateo y Pitcheo (FanGraphs / BRef enriquecidos)
     critical_tasks = [
         ("batting",  lambda: fetcher.batting(year, force=True)),
         ("pitching", lambda: fetcher.pitching(year, force=True)),
     ]
-
-    # Best-effort: FanGraphs — puede fallar en CI por bloqueo de IP
-    best_effort_tasks = [
-        ("team_batting",  lambda: fetcher.team_bat(year, force=True)),
-        ("team_pitching", lambda: fetcher.team_pit(year, force=True)),
-    ]
-
     for name, fn in critical_tasks:
         try:
             df = fn()
@@ -47,9 +65,13 @@ def refresh(year: int) -> None:
         except Exception as e:
             print(f"  [ERROR] {name}: {type(e).__name__}: {e}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
-            sys.exit(1)
 
-    for name, fn in best_effort_tasks:
+    # 4. Estadísticas Colectivas por Equipo
+    team_tasks = [
+        ("team_batting",  lambda: fetcher.team_bat(year, force=True)),
+        ("team_pitching", lambda: fetcher.team_pit(year, force=True)),
+    ]
+    for name, fn in team_tasks:
         try:
             df = fn()
             print(f"  [OK] {name}: {len(df):,} filas")

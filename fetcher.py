@@ -109,6 +109,121 @@ def get_player_positions(year: int = _NOW_YEAR, force: bool = False) -> dict[str
         return {}
 
 
+# ── Statcast Expected Stats & Quality of Contact (Baseball Savant) ───────────
+
+def statcast_batting(year: int, force: bool = False) -> pd.DataFrame:
+    """
+    Descarga estadísticas esperadas y calidad de contacto de Baseball Savant (Statcast).
+    Métricas: xBA, xSLG, xwOBA, diff_wOBA, diff_BA, diff_SLG, EV, maxEV, HardHit%, Barrel%, SweetSpot%.
+    """
+    key = f"statcast_bat_{year}"
+    path = _path(key)
+    ttl = 12.0 if year >= _NOW_YEAR else 24.0 * 365
+
+    if not force and not _expired(path, ttl):
+        print(f"[fetcher] cache -> {path.name}")
+        return pd.read_parquet(path)
+
+    try:
+        from pybaseball import statcast_batter_expected_stats, statcast_batter_exitvelo_barrels
+        print(f"[fetcher] descargando statcast batting {year}...")
+        df_exp = statcast_batter_expected_stats(year, 1)
+        df_ev = statcast_batter_exitvelo_barrels(year, 1)
+
+        if df_exp is not None and not df_exp.empty:
+            df_exp = df_exp.rename(columns={
+                "player_id": "mlbID",
+                "est_ba": "xBA",
+                "est_slg": "xSLG",
+                "est_woba": "xwOBA",
+                "est_woba_minus_woba_diff": "diff_wOBA",
+                "est_ba_minus_ba_diff": "diff_BA",
+                "est_slg_minus_slg_diff": "diff_SLG",
+            })
+            if "last_name, first_name" in df_exp.columns:
+                df_exp["Name_Savant"] = df_exp["last_name, first_name"].apply(
+                    lambda n: " ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n)
+                )
+
+        if df_ev is not None and not df_ev.empty:
+            df_ev = df_ev.rename(columns={
+                "player_id": "mlbID",
+                "avg_hit_speed": "EV",
+                "max_hit_speed": "maxEV",
+                "ev95percent": "HardHit%",
+                "brl_percent": "Barrel%",
+                "anglesweetspotpercent": "SweetSpot%",
+            })
+            ev_cols = ["mlbID", "EV", "maxEV", "HardHit%", "Barrel%", "SweetSpot%"]
+            ev_cols = [c for c in ev_cols if c in df_ev.columns]
+            if df_exp is not None and not df_exp.empty and "mlbID" in df_exp.columns and "mlbID" in df_ev.columns:
+                df_exp = pd.merge(df_exp, df_ev[ev_cols], on="mlbID", how="left")
+
+        if df_exp is not None and not df_exp.empty:
+            df_exp.to_parquet(path, index=False)
+            return df_exp
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"[fetcher] Error descargando statcast batting {year}: {e}")
+        if path.exists():
+            return pd.read_parquet(path)
+        return pd.DataFrame()
+
+
+def statcast_pitching(year: int, force: bool = False) -> pd.DataFrame:
+    """
+    Descarga estadísticas esperadas y calidad de contacto permitido de Baseball Savant (Statcast).
+    Métricas: xERA, diff_ERA, xwOBA_against, EV_against, HardHit%_against, Barrel%_against.
+    """
+    key = f"statcast_pit_{year}"
+    path = _path(key)
+    ttl = 12.0 if year >= _NOW_YEAR else 24.0 * 365
+
+    if not force and not _expired(path, ttl):
+        print(f"[fetcher] cache -> {path.name}")
+        return pd.read_parquet(path)
+
+    try:
+        from pybaseball import statcast_pitcher_expected_stats, statcast_pitcher_exitvelo_barrels
+        print(f"[fetcher] descargando statcast pitching {year}...")
+        df_exp = statcast_pitcher_expected_stats(year, 1)
+        df_ev = statcast_pitcher_exitvelo_barrels(year, 1)
+
+        if df_exp is not None and not df_exp.empty:
+            df_exp = df_exp.rename(columns={
+                "player_id": "mlbID",
+                "xera": "xERA",
+                "era_minus_xera_diff": "diff_ERA",
+                "est_woba": "xwOBA_against",
+            })
+            if "last_name, first_name" in df_exp.columns:
+                df_exp["Name_Savant"] = df_exp["last_name, first_name"].apply(
+                    lambda n: " ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n)
+                )
+
+        if df_ev is not None and not df_ev.empty:
+            df_ev = df_ev.rename(columns={
+                "player_id": "mlbID",
+                "avg_hit_speed": "EV_against",
+                "ev95percent": "HardHit%_against",
+                "brl_percent": "Barrel%_against",
+            })
+            ev_cols = ["mlbID", "EV_against", "HardHit%_against", "Barrel%_against"]
+            ev_cols = [c for c in ev_cols if c in df_ev.columns]
+            if df_exp is not None and not df_exp.empty and "mlbID" in df_exp.columns and "mlbID" in df_ev.columns:
+                df_exp = pd.merge(df_exp, df_ev[ev_cols], on="mlbID", how="left")
+
+        if df_exp is not None and not df_exp.empty:
+            df_exp.to_parquet(path, index=False)
+            return df_exp
+        return pd.DataFrame()
+    except Exception as e:
+        print(f"[fetcher] Error descargando statcast pitching {year}: {e}")
+        if path.exists():
+            return pd.read_parquet(path)
+        return pd.DataFrame()
+
+
 # ── Bateadores y Pitchers Individuales ────────────────────────────────────────
 
 def batting(year: int, force: bool = False) -> pd.DataFrame:
@@ -159,6 +274,26 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
         obp = pd.to_numeric(df.get("OBP", 0.320), errors="coerce").fillna(0.320)
         slg = pd.to_numeric(df.get("SLG", 0.400), errors="coerce").fillna(0.400)
         df["wOBA"] = ((obp * 0.69) + (slg * 0.45)).round(3)
+
+    # Fusionar con métricas reales de Statcast (Baseball Savant)
+    try:
+        sc_bat = statcast_batting(year)
+        if sc_bat is not None and not sc_bat.empty:
+            merge_cols = [c for c in ["xBA", "xSLG", "xwOBA", "diff_wOBA", "diff_BA", "diff_SLG", "EV", "maxEV", "HardHit%", "Barrel%", "SweetSpot%"] if c in sc_bat.columns]
+            if "mlbID" in df.columns and "mlbID" in sc_bat.columns:
+                df["_join_id"] = pd.to_numeric(df["mlbID"], errors="coerce").fillna(-1).astype(int)
+                sc_bat["_join_id"] = pd.to_numeric(sc_bat["mlbID"], errors="coerce").fillna(-1).astype(int)
+                cols_to_drop = [c for c in merge_cols if c in df.columns]
+                df_clean = df.drop(columns=cols_to_drop, errors="ignore")
+                df = pd.merge(df_clean, sc_bat[["_join_id"] + merge_cols].drop_duplicates("_join_id"), on="_join_id", how="left").drop(columns=["_join_id"], errors="ignore")
+            elif "Name" in df.columns and "Name_Savant" in sc_bat.columns:
+                cols_to_drop = [c for c in merge_cols if c in df.columns]
+                df_clean = df.drop(columns=cols_to_drop, errors="ignore")
+                df = pd.merge(df_clean, sc_bat[["Name_Savant"] + merge_cols].drop_duplicates("Name_Savant"), left_on="Name", right_on="Name_Savant", how="left").drop(columns=["Name_Savant"], errors="ignore")
+    except Exception as e:
+        print(f"[fetcher] Aviso: no se pudo fusionar Statcast batting: {e}")
+
+    # Fallbacks si Statcast no contiene al jugador
     if "xBA" not in df.columns and "AVG" in df.columns:
         df["xBA"] = df["AVG"]
     if "xSLG" not in df.columns and "SLG" in df.columns:
@@ -220,6 +355,26 @@ def pitching(year: int, force: bool = False) -> pd.DataFrame:
         ip = pd.to_numeric(df.get("IP", 0), errors="coerce").fillna(0)
         so = pd.to_numeric(df.get("SO", 0), errors="coerce").fillna(0)
         df["WAR"] = (((4.20 - era) * ip / 100.0) + (so * 0.01)).round(1)
+
+    # Fusionar con métricas reales de Statcast (Baseball Savant)
+    try:
+        sc_pit = statcast_pitching(year)
+        if sc_pit is not None and not sc_pit.empty:
+            merge_cols = [c for c in ["xERA", "diff_ERA", "xwOBA_against", "EV_against", "HardHit%_against", "Barrel%_against"] if c in sc_pit.columns]
+            if "mlbID" in df.columns and "mlbID" in sc_pit.columns:
+                df["_join_id"] = pd.to_numeric(df["mlbID"], errors="coerce").fillna(-1).astype(int)
+                sc_pit["_join_id"] = pd.to_numeric(sc_pit["mlbID"], errors="coerce").fillna(-1).astype(int)
+                cols_to_drop = [c for c in merge_cols if c in df.columns]
+                df_clean = df.drop(columns=cols_to_drop, errors="ignore")
+                df = pd.merge(df_clean, sc_pit[["_join_id"] + merge_cols].drop_duplicates("_join_id"), on="_join_id", how="left").drop(columns=["_join_id"], errors="ignore")
+            elif "Name" in df.columns and "Name_Savant" in sc_pit.columns:
+                cols_to_drop = [c for c in merge_cols if c in df.columns]
+                df_clean = df.drop(columns=cols_to_drop, errors="ignore")
+                df = pd.merge(df_clean, sc_pit[["Name_Savant"] + merge_cols].drop_duplicates("Name_Savant"), left_on="Name", right_on="Name_Savant", how="left").drop(columns=["Name_Savant"], errors="ignore")
+    except Exception as e:
+        print(f"[fetcher] Aviso: no se pudo fusionar Statcast pitching: {e}")
+
+    # Fallbacks si Statcast no contiene al lanzador
     if "xERA" not in df.columns and "ERA" in df.columns:
         df["xERA"] = df["ERA"]
     if "SIERA" not in df.columns and "ERA" in df.columns:

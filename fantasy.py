@@ -116,22 +116,40 @@ def calculate_pitching_fantasy(df: pd.DataFrame, scoring_preset: str = 'ESPN Sta
 
 def get_buy_low_sell_high(df_bat: pd.DataFrame, df_pit: pd.DataFrame, min_pa: int = 80, min_ip: int = 30) -> dict[str, pd.DataFrame]:
     results = {}
-    if not df_bat.empty and 'diff_wOBA' in df_bat.columns:
+    if not df_bat.empty:
         bat_qual = df_bat[df_bat.get('PA', pd.Series(0, index=df_bat.index)).fillna(0) >= min_pa].copy()
-        buy_bat = bat_qual[bat_qual['diff_wOBA'] > 0.015].sort_values('diff_wOBA', ascending=False)
-        sell_bat = bat_qual[bat_qual['diff_wOBA'] < -0.015].sort_values('diff_wOBA', ascending=True)
-        results['bat_buy_low'] = buy_bat
-        results['bat_sell_high'] = sell_bat
+        if 'diff_wOBA' not in bat_qual.columns and 'xwOBA' in bat_qual.columns and 'wOBA' in bat_qual.columns:
+            bat_qual['diff_wOBA'] = (bat_qual['xwOBA'] - bat_qual['wOBA']).round(3)
+
+        if 'diff_wOBA' in bat_qual.columns:
+            buy_bat = bat_qual[bat_qual['diff_wOBA'] >= 0.015].sort_values('diff_wOBA', ascending=False).copy()
+            buy_bat['Status'] = '🟢 Comprar Barato (Mala Suerte / Repunte Esperado)'
+            sell_bat = bat_qual[bat_qual['diff_wOBA'] <= -0.015].sort_values('diff_wOBA', ascending=True).copy()
+            sell_bat['Status'] = '🔴 Vender Alto (Rendimiento por encima de lo esperado)'
+            results['bat_buy_low'] = buy_bat
+            results['bat_sell_high'] = sell_bat
+        else:
+            results['bat_buy_low'] = pd.DataFrame()
+            results['bat_sell_high'] = pd.DataFrame()
     else:
         results['bat_buy_low'] = pd.DataFrame()
         results['bat_sell_high'] = pd.DataFrame()
 
-    if not df_pit.empty and 'diff_ERA' in df_pit.columns:
+    if not df_pit.empty:
         pit_qual = df_pit[df_pit.get('IP', pd.Series(0, index=df_pit.index)).fillna(0) >= min_ip].copy()
-        buy_pit = pit_qual[pit_qual['diff_ERA'] > 0.35].sort_values('diff_ERA', ascending=False)
-        sell_pit = pit_qual[pit_qual['diff_ERA'] < -0.35].sort_values('diff_ERA', ascending=True)
-        results['pit_buy_low'] = buy_pit
-        results['pit_sell_high'] = sell_pit
+        if 'diff_ERA' not in pit_qual.columns and 'xERA' in pit_qual.columns and 'ERA' in pit_qual.columns:
+            pit_qual['diff_ERA'] = (pit_qual['ERA'] - pit_qual['xERA']).round(2)
+
+        if 'diff_ERA' in pit_qual.columns:
+            buy_pit = pit_qual[pit_qual['diff_ERA'] >= 0.35].sort_values('diff_ERA', ascending=False).copy()
+            buy_pit['Status'] = '🟢 Comprar Barato (ERA inflado por mala suerte)'
+            sell_pit = pit_qual[pit_qual['diff_ERA'] <= -0.35].sort_values('diff_ERA', ascending=True).copy()
+            sell_pit['Status'] = '🔴 Vender Alto (ERA engañoso / regresión esperada)'
+            results['pit_buy_low'] = buy_pit
+            results['pit_sell_high'] = sell_pit
+        else:
+            results['pit_buy_low'] = pd.DataFrame()
+            results['pit_sell_high'] = pd.DataFrame()
     else:
         results['pit_buy_low'] = pd.DataFrame()
         results['pit_sell_high'] = pd.DataFrame()
