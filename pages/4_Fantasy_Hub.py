@@ -22,7 +22,7 @@ import fetcher
 import fantasy
 from constants import (
     MLB_TEAMS, PARK_FACTORS, FANTASY_SCORING_PRESETS,
-    STATCAST_BAT_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER
+    STATCAST_BAT_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER, AVAILABLE_SEASONS
 )
 from utils import format_display
 
@@ -40,8 +40,8 @@ with st.sidebar:
 
     year = st.selectbox(
         "Temporada",
-        options=list(range(2026, 2009, -1)),
-        index=1,
+        options=AVAILABLE_SEASONS,
+        index=0,
     )
     scoring_preset = st.selectbox(
         "Formato de Puntos",

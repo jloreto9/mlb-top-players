@@ -13,7 +13,7 @@ import plotly.express as px
 
 import fetcher
 import fantasy
-from constants import TEAM_LEAGUE, TBAT_COLS, TPIT_COLS, TFIELD_COLS, LOWER_IS_BETTER
+from constants import TEAM_LEAGUE, TBAT_COLS, TPIT_COLS, TFIELD_COLS, LOWER_IS_BETTER, AVAILABLE_SEASONS
 from utils import format_display, put_league_after_team
 
 # ── Configuración ──────────────────────────────────────────────────────────
@@ -31,8 +31,8 @@ with st.sidebar:
 
     year = st.selectbox(
         "Temporada",
-        options=list(range(2026, 2009, -1)),
-        index=1,          # default: 2025
+        options=AVAILABLE_SEASONS,
+        index=0,          # default: 2026 (última temporada)
     )
     force = st.checkbox("🔄 Forzar re-descarga", value=False)
     st.divider()

@@ -29,7 +29,7 @@ import fantasy
 from constants import (
     TEAM_LEAGUE, BAT_COLS, BAT_FANTASY_COLS, STATCAST_BAT_COLS,
     PIT_COLS, PIT_FANTASY_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER,
-    FANTASY_SCORING_PRESETS
+    FANTASY_SCORING_PRESETS, AVAILABLE_SEASONS
 )
 from utils import format_display, put_league_after_team
 
@@ -48,8 +48,8 @@ with st.sidebar:
 
     year = st.selectbox(
         "Temporada",
-        options=list(range(2026, 2009, -1)),
-        index=1,
+        options=AVAILABLE_SEASONS,
+        index=0,
     )
     
     scoring_preset = st.selectbox(

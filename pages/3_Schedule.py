@@ -14,15 +14,13 @@ import streamlit as st
 import pandas as pd
 
 import fetcher
-from constants import MLB_TEAMS
+from constants import MLB_TEAMS, AVAILABLE_SEASONS
 
 st.set_page_config(
     page_title="Schedule · MLB Stats",
     page_icon="📅",
     layout="wide",
 )
-
-_NOW_YEAR = datetime.now().year
 
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
@@ -41,7 +39,7 @@ with st.sidebar:
     )
     year = st.selectbox(
         "Temporada",
-        options=list(range(_NOW_YEAR, 2009, -1)),
+        options=AVAILABLE_SEASONS,
         index=0,
     )
     force = st.checkbox("🔄 Forzar re-descarga", value=False)

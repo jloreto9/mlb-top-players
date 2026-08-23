@@ -136,10 +136,25 @@ def statcast_batting(year: int, force: bool = False) -> pd.DataFrame:
                 "est_ba": "xBA",
                 "est_slg": "xSLG",
                 "est_woba": "xwOBA",
-                "est_woba_minus_woba_diff": "diff_wOBA",
-                "est_ba_minus_ba_diff": "diff_BA",
-                "est_slg_minus_slg_diff": "diff_SLG",
             })
+            ba_col = "ba" if "ba" in df_exp.columns else "ba_sc"
+            if ba_col in df_exp.columns and "xBA" in df_exp.columns:
+                df_exp["diff_BA"] = (pd.to_numeric(df_exp[ba_col], errors="coerce") - pd.to_numeric(df_exp["xBA"], errors="coerce")).round(3)
+            elif "est_ba_minus_ba_diff" in df_exp.columns:
+                df_exp["diff_BA"] = pd.to_numeric(df_exp["est_ba_minus_ba_diff"], errors="coerce").round(3)
+
+            slg_col = "slg" if "slg" in df_exp.columns else "slg_sc"
+            if slg_col in df_exp.columns and "xSLG" in df_exp.columns:
+                df_exp["diff_SLG"] = (pd.to_numeric(df_exp[slg_col], errors="coerce") - pd.to_numeric(df_exp["xSLG"], errors="coerce")).round(3)
+            elif "est_slg_minus_slg_diff" in df_exp.columns:
+                df_exp["diff_SLG"] = pd.to_numeric(df_exp["est_slg_minus_slg_diff"], errors="coerce").round(3)
+
+            woba_col = "woba" if "woba" in df_exp.columns else "woba_sc"
+            if woba_col in df_exp.columns and "xwOBA" in df_exp.columns:
+                df_exp["diff_wOBA"] = (pd.to_numeric(df_exp[woba_col], errors="coerce") - pd.to_numeric(df_exp["xwOBA"], errors="coerce")).round(3)
+            elif "est_woba_minus_woba_diff" in df_exp.columns:
+                df_exp["diff_wOBA"] = pd.to_numeric(df_exp["est_woba_minus_woba_diff"], errors="coerce").round(3)
+
             if "last_name, first_name" in df_exp.columns:
                 df_exp["Name_Savant"] = df_exp["last_name, first_name"].apply(
                     lambda n: " ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n)
@@ -293,13 +308,13 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
     except Exception as e:
         print(f"[fetcher] Aviso: no se pudo fusionar Statcast batting: {e}")
 
-    # Asegurar diferenciales Statcast explícitos
+    # Asegurar diferenciales Statcast explícitos (Real - Esperado: Negativo = Por debajo de lo esperado)
     if "xBA" in df.columns and "AVG" in df.columns:
-        df["diff_BA"] = (pd.to_numeric(df["xBA"], errors="coerce") - pd.to_numeric(df["AVG"], errors="coerce")).round(3)
+        df["diff_BA"] = (pd.to_numeric(df["AVG"], errors="coerce") - pd.to_numeric(df["xBA"], errors="coerce")).round(3)
     if "xSLG" in df.columns and "SLG" in df.columns:
-        df["diff_SLG"] = (pd.to_numeric(df["xSLG"], errors="coerce") - pd.to_numeric(df["SLG"], errors="coerce")).round(3)
+        df["diff_SLG"] = (pd.to_numeric(df["SLG"], errors="coerce") - pd.to_numeric(df["xSLG"], errors="coerce")).round(3)
     if "xwOBA" in df.columns and "wOBA" in df.columns:
-        df["diff_wOBA"] = (pd.to_numeric(df["xwOBA"], errors="coerce") - pd.to_numeric(df["wOBA"], errors="coerce")).round(3)
+        df["diff_wOBA"] = (pd.to_numeric(df["wOBA"], errors="coerce") - pd.to_numeric(df["xwOBA"], errors="coerce")).round(3)
 
     # Enriquecer con posiciones de campo MLB y liga
     pos_map = get_player_positions(year)

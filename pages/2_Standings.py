@@ -12,6 +12,7 @@ import streamlit as st
 import pandas as pd
 
 import fetcher
+from constants import AVAILABLE_SEASONS
 
 st.set_page_config(
     page_title="Standings & Playoffs · MLB Stats",
@@ -22,8 +23,6 @@ st.set_page_config(
 DIVISIONS_AL = ["AL East", "AL Central", "AL West"]
 DIVISIONS_NL = ["NL East", "NL Central", "NL West"]
 
-_NOW_YEAR = datetime.now().year
-
 # ── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.title("🏆 Standings")
@@ -32,7 +31,7 @@ with st.sidebar:
 
     year = st.selectbox(
         "Temporada",
-        options=list(range(_NOW_YEAR, 2009, -1)),
+        options=AVAILABLE_SEASONS,
         index=0,
     )
     force = st.checkbox("🔄 Forzar re-descarga", value=False)

@@ -4,7 +4,11 @@ constants.py
 Mapeo de equipos, ligas, columnas de display, métricas Statcast y configuraciones de Fantasy Baseball.
 """
 
+# ── Temporadas disponibles (2026 predeterminada) ───────────────────────────
+AVAILABLE_SEASONS: list[int] = [2026, 2025]
+
 # ── Equipo → Liga (Abreviaturas, Nombres y Ciudades) ─────────────────────────
+
 TEAM_LEAGUE: dict[str, str] = {
     # AL East
     "BAL": "AL", "BALTIMORE": "AL", "BALTIMORE ORIOLES": "AL",

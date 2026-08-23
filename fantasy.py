@@ -27,11 +27,11 @@ def calculate_batting_fantasy(df: pd.DataFrame, scoring_preset: str = 'ESPN Stan
             out['1B'] = out.get('H', 0)
 
     if 'xBA' in out.columns and 'AVG' in out.columns:
-        out['diff_BA'] = out['xBA'] - out['AVG']
+        out['diff_BA'] = (pd.to_numeric(out['AVG'], errors='coerce') - pd.to_numeric(out['xBA'], errors='coerce')).round(3)
     if 'xSLG' in out.columns and 'SLG' in out.columns:
-        out['diff_SLG'] = out['xSLG'] - out['SLG']
+        out['diff_SLG'] = (pd.to_numeric(out['SLG'], errors='coerce') - pd.to_numeric(out['xSLG'], errors='coerce')).round(3)
     if 'xwOBA' in out.columns and 'wOBA' in out.columns:
-        out['diff_wOBA'] = out['xwOBA'] - out['wOBA']
+        out['diff_wOBA'] = (pd.to_numeric(out['wOBA'], errors='coerce') - pd.to_numeric(out['xwOBA'], errors='coerce')).round(3)
 
     preset = FANTASY_SCORING_PRESETS.get(scoring_preset, FANTASY_SCORING_PRESETS['ESPN Standard'])['batting']
     pts = pd.Series(0.0, index=out.index)
@@ -119,13 +119,13 @@ def get_buy_low_sell_high(df_bat: pd.DataFrame, df_pit: pd.DataFrame, min_pa: in
     if not df_bat.empty:
         bat_qual = df_bat[df_bat.get('PA', pd.Series(0, index=df_bat.index)).fillna(0) >= min_pa].copy()
         if 'diff_wOBA' not in bat_qual.columns and 'xwOBA' in bat_qual.columns and 'wOBA' in bat_qual.columns:
-            bat_qual['diff_wOBA'] = (bat_qual['xwOBA'] - bat_qual['wOBA']).round(3)
+            bat_qual['diff_wOBA'] = (pd.to_numeric(bat_qual['wOBA'], errors='coerce') - pd.to_numeric(bat_qual['xwOBA'], errors='coerce')).round(3)
 
         if 'diff_wOBA' in bat_qual.columns:
-            buy_bat = bat_qual[bat_qual['diff_wOBA'] >= 0.015].sort_values('diff_wOBA', ascending=False).copy()
-            buy_bat['Status'] = '🟢 Comprar Barato (Mala Suerte / Repunte Esperado)'
-            sell_bat = bat_qual[bat_qual['diff_wOBA'] <= -0.015].sort_values('diff_wOBA', ascending=True).copy()
-            sell_bat['Status'] = '🔴 Vender Alto (Rendimiento por encima de lo esperado)'
+            buy_bat = bat_qual[bat_qual['diff_wOBA'] <= -0.015].sort_values('diff_wOBA', ascending=True).copy()
+            buy_bat['Status'] = '🟢 Comprar Barato (Mala Suerte / Rendimiento por debajo de lo esperado)'
+            sell_bat = bat_qual[bat_qual['diff_wOBA'] >= 0.015].sort_values('diff_wOBA', ascending=False).copy()
+            sell_bat['Status'] = '🔴 Vender Alto (Rendimiento por encima de lo esperado / Regresión)'
             results['bat_buy_low'] = buy_bat
             results['bat_sell_high'] = sell_bat
         else:
