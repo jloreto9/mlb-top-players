@@ -55,7 +55,14 @@ RATE1_COLS = {"WAR", "IP", "K/9", "BB/9", "HR/9", "H/9", "RS/9", "EV", "maxEV", 
 RATE2_COLS = {"ERA", "xERA", "FIP", "xFIP", "SIERA", "botERA", "WHIP", "K/BB", "AVG_velo"}
 
 
-# ── Funciones de formato y limpieza ────────────────────────────────────────
+def get_team_logo(team_name_or_abbr: str | None) -> str:
+    """Devuelve la URL del logo oficial para un equipo, o un logo genérico de MLB."""
+    try:
+        from constants import get_team_logo as _gtl
+        return _gtl(team_name_or_abbr)
+    except Exception:
+        return "https://a.espncdn.com/i/teamlogos/mlb/500/mlb.png"
+
 
 def clean_ascii_text(val) -> str:
     """

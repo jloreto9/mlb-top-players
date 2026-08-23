@@ -12,8 +12,8 @@ import streamlit as st
 import pandas as pd
 
 import fetcher
-from constants import AVAILABLE_SEASONS, get_team_logo
-from utils import clean_ascii_text
+from constants import AVAILABLE_SEASONS
+from utils import clean_ascii_text, get_team_logo
 
 _NOW_YEAR = datetime.now().year
 
