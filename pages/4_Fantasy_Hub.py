@@ -103,17 +103,21 @@ with tab_buy_sell:
 
     reg_dict = fantasy.get_buy_low_sell_high(bat_df, pit_df, min_pa=min_pa, min_ip=min_ip)
 
+    FH_LOGO_CONFIG = {"Logo": st.column_config.ImageColumn("Logo", width="small")}
+
     st.divider()
     b_col1, b_col2 = st.columns(2)
 
     with b_col1:
         st.markdown("### 🟢 Bateadores: Candidatos a Repuntar (Buy-Low)")
         st.caption("Tienen métricas Statcast superiores a sus números tradicionales (xwOBA > wOBA).")
-        buy_bat = reg_dict["bat_buy_low"]
+        buy_bat = reg_dict["bat_buy_low"].copy()
         if not buy_bat.empty:
-            cols = ["Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
+            if "Logo" not in buy_bat.columns and "Team" in buy_bat.columns:
+                buy_bat.insert(0, "Logo", buy_bat["Team"].apply(get_team_logo))
+            cols = ["Logo", "Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
             disp_cols = [c for c in cols if c in buy_bat.columns]
-            st.dataframe(format_display(buy_bat[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(buy_bat[disp_cols].head(30)), column_config=FH_LOGO_CONFIG, use_container_width=True, hide_index=True)
             st.download_button("📥 Descargar Bateadores Buy-Low (CSV)", data=buy_bat[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"buy_low_batting_{year}.csv", mime="text/csv")
         else:
             st.info("No hay candidatos suficientes con el filtro actual.")
@@ -121,11 +125,13 @@ with tab_buy_sell:
     with b_col2:
         st.markdown("### 🔴 Bateadores: Riesgo de Caída (Sell-High)")
         st.caption("Están sobre-rindiendo su calidad real de contacto (wOBA > xwOBA).")
-        sell_bat = reg_dict["bat_sell_high"]
+        sell_bat = reg_dict["bat_sell_high"].copy()
         if not sell_bat.empty:
-            cols = ["Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
+            if "Logo" not in sell_bat.columns and "Team" in sell_bat.columns:
+                sell_bat.insert(0, "Logo", sell_bat["Team"].apply(get_team_logo))
+            cols = ["Logo", "Name", "Team", "Pos", "PA", "AVG", "xBA", "diff_BA", "wOBA", "xwOBA", "diff_wOBA", "HardHit%", "Barrel%"]
             disp_cols = [c for c in cols if c in sell_bat.columns]
-            st.dataframe(format_display(sell_bat[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(sell_bat[disp_cols].head(30)), column_config=FH_LOGO_CONFIG, use_container_width=True, hide_index=True)
             st.download_button("📥 Descargar Bateadores Sell-High (CSV)", data=sell_bat[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"sell_high_batting_{year}.csv", mime="text/csv")
         else:
             st.info("No hay candidatos suficientes con el filtro actual.")
@@ -136,11 +142,13 @@ with tab_buy_sell:
     with p_col1:
         st.markdown("### 🟢 Pitchers: Efectividad Inflada por Mala Suerte (Buy-Low)")
         st.caption("Tienen una ERA más alta que su xERA / SIERA pero mantienen buen Stuff/K%.")
-        buy_pit = reg_dict["pit_buy_low"]
+        buy_pit = reg_dict["pit_buy_low"].copy()
         if not buy_pit.empty:
-            cols = ["Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "SO", "K%", "BB%"]
+            if "Logo" not in buy_pit.columns and "Team" in buy_pit.columns:
+                buy_pit.insert(0, "Logo", buy_pit["Team"].apply(get_team_logo))
+            cols = ["Logo", "Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "SO", "K%", "BB%"]
             disp_cols = [c for c in cols if c in buy_pit.columns]
-            st.dataframe(format_display(buy_pit[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(buy_pit[disp_cols].head(30)), column_config=FH_LOGO_CONFIG, use_container_width=True, hide_index=True)
             st.download_button("📥 Descargar Pitchers Buy-Low (CSV)", data=buy_pit[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"buy_low_pitching_{year}.csv", mime="text/csv")
         else:
             st.info("Sin candidatos.")
@@ -148,11 +156,13 @@ with tab_buy_sell:
     with p_col2:
         st.markdown("### 🔴 Pitchers: Efectividad Engañosa (Sell-High)")
         st.caption("Tienen una ERA baja pero su contacto permitido (xERA) predice regresión negativa.")
-        sell_pit = reg_dict["pit_sell_high"]
+        sell_pit = reg_dict["pit_sell_high"].copy()
         if not sell_pit.empty:
-            cols = ["Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "SO", "K%", "BB%"]
+            if "Logo" not in sell_pit.columns and "Team" in sell_pit.columns:
+                sell_pit.insert(0, "Logo", sell_pit["Team"].apply(get_team_logo))
+            cols = ["Logo", "Name", "Team", "Pos", "IP", "ERA", "xERA", "diff_ERA", "SIERA", "WHIP", "SO", "K%", "BB%"]
             disp_cols = [c for c in cols if c in sell_pit.columns]
-            st.dataframe(format_display(sell_pit[disp_cols].head(30)), use_container_width=True, hide_index=True)
+            st.dataframe(format_display(sell_pit[disp_cols].head(30)), column_config=FH_LOGO_CONFIG, use_container_width=True, hide_index=True)
             st.download_button("📥 Descargar Pitchers Sell-High (CSV)", data=sell_pit[disp_cols].to_csv(index=False).encode('utf-8'), file_name=f"sell_high_pitching_{year}.csv", mime="text/csv")
         else:
             st.info("Sin candidatos.")
@@ -214,7 +224,11 @@ with tab_streamer:
             if only_two_starts:
                 filtered_sp = filtered_sp[filtered_sp["Two_Start"] == "⭐ 2-Starts"]
 
-            st.dataframe(format_display(filtered_sp), use_container_width=True, height=550, hide_index=True)
+            if "Logo" not in filtered_sp.columns and "Team" in filtered_sp.columns:
+                filtered_sp.insert(0, "Logo", filtered_sp["Team"].apply(get_team_logo))
+
+            sp_logo_config = {"Logo": st.column_config.ImageColumn("Logo", width="small")}
+            st.dataframe(format_display(filtered_sp), column_config=sp_logo_config, use_container_width=True, height=550, hide_index=True)
             st.download_button("📥 Descargar Planificador de Abridores (CSV)", data=filtered_sp.to_csv(index=False).encode('utf-8'), file_name=f"sp_streamer_{s_date}_{e_date}.csv", mime="text/csv")
         else:
             st.info("No se encontraron partidos o abridores programados para el rango de fechas seleccionado.")
@@ -264,9 +278,12 @@ with tab_compare:
 
         if sel_players:
             comp_df = bat_df[bat_df["Name"].isin(sel_players)].copy()
-            show_cols = ["Name", "Team", "Pos", "G", "PA", "R", "HR", "RBI", "SB", "AVG", "OBP", "SLG", "wOBA", "xwOBA", "HardHit%", "Barrel%", "Fantasy_Rank", "Fantasy_Pts", "z_Total"]
+            if "Logo" not in comp_df.columns and "Team" in comp_df.columns:
+                comp_df.insert(0, "Logo", comp_df["Team"].apply(get_team_logo))
+            show_cols = ["Logo", "Name", "Team", "Pos", "G", "PA", "R", "HR", "RBI", "SB", "AVG", "OBP", "SLG", "wOBA", "xwOBA", "HardHit%", "Barrel%", "Fantasy_Rank", "Fantasy_Pts", "z_Total"]
             st.markdown("#### 📋 Tabla Comparativa")
-            st.dataframe(format_display(comp_df[[c for c in show_cols if c in comp_df.columns]]), use_container_width=True, hide_index=True)
+            comp_logo_cfg = {"Logo": st.column_config.ImageColumn("Logo", width="small")}
+            st.dataframe(format_display(comp_df[[c for c in show_cols if c in comp_df.columns]]), column_config=comp_logo_cfg, use_container_width=True, hide_index=True)
 
             fig = px.bar(
                 comp_df,
@@ -286,9 +303,12 @@ with tab_compare:
 
         if sel_players:
             comp_df = pit_df[pit_df["Name"].isin(sel_players)].copy()
-            show_cols = ["Name", "Team", "Pos", "W", "L", "SV", "IP", "ERA", "xERA", "SIERA", "WHIP", "SO", "K%", "BB%", "Stuff+", "Fantasy_Rank", "Fantasy_Pts", "z_Total"]
+            if "Logo" not in comp_df.columns and "Team" in comp_df.columns:
+                comp_df.insert(0, "Logo", comp_df["Team"].apply(get_team_logo))
+            show_cols = ["Logo", "Name", "Team", "Pos", "W", "L", "SV", "IP", "ERA", "xERA", "SIERA", "WHIP", "SO", "K%", "BB%", "Stuff+", "Fantasy_Rank", "Fantasy_Pts", "z_Total"]
             st.markdown("#### 📋 Tabla Comparativa")
-            st.dataframe(format_display(comp_df[[c for c in show_cols if c in comp_df.columns]]), use_container_width=True, hide_index=True)
+            comp_logo_cfg = {"Logo": st.column_config.ImageColumn("Logo", width="small")}
+            st.dataframe(format_display(comp_df[[c for c in show_cols if c in comp_df.columns]]), column_config=comp_logo_cfg, use_container_width=True, hide_index=True)
 
             fig = px.bar(
                 comp_df,

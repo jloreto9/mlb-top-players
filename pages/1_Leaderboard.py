@@ -29,7 +29,7 @@ import fantasy
 from constants import (
     TEAM_LEAGUE, BAT_COLS, BAT_FANTASY_COLS, STATCAST_BAT_COLS,
     PIT_COLS, PIT_FANTASY_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER,
-    FANTASY_SCORING_PRESETS, AVAILABLE_SEASONS
+    FANTASY_SCORING_PRESETS, AVAILABLE_SEASONS, get_team_logo
 )
 from utils import format_display, put_league_after_team
 
@@ -223,10 +223,20 @@ def _show_leaderboard(
         .reset_index(drop=True)
     )
     sorted_df = put_league_after_team(sorted_df)
+    
+    # Inyectar logo del equipo
+    if "Team" in sorted_df.columns:
+        sorted_df.insert(0, "Logo", sorted_df["Team"].apply(get_team_logo))
+    
     sorted_df.index += 1
+
+    table_config = {
+        "Logo": st.column_config.ImageColumn("Logo", width="small"),
+    }
 
     st.dataframe(
         format_display(sorted_df),
+        column_config=table_config,
         use_container_width=True,
         hide_index=False,
         height=620,
