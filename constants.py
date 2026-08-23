@@ -176,6 +176,64 @@ def resolve_team_full_name(team_str: str | None) -> str:
             return v
     return s
 
+# ── Logos Oficiales de Equipos MLB (ESPN CDN PNG Transparente 500x500) ───────
+_ESPN_LOGO_BASE = "https://a.espncdn.com/i/teamlogos/mlb/500"
+
+TEAM_LOGOS: dict[str, str] = {
+    "Baltimore Orioles": f"{_ESPN_LOGO_BASE}/bal.png",
+    "Boston Red Sox": f"{_ESPN_LOGO_BASE}/bos.png",
+    "New York Yankees": f"{_ESPN_LOGO_BASE}/nyy.png",
+    "Tampa Bay Rays": f"{_ESPN_LOGO_BASE}/tb.png",
+    "Toronto Blue Jays": f"{_ESPN_LOGO_BASE}/tor.png",
+    "Chicago White Sox": f"{_ESPN_LOGO_BASE}/chw.png",
+    "Cleveland Guardians": f"{_ESPN_LOGO_BASE}/cle.png",
+    "Detroit Tigers": f"{_ESPN_LOGO_BASE}/det.png",
+    "Kansas City Royals": f"{_ESPN_LOGO_BASE}/kc.png",
+    "Minnesota Twins": f"{_ESPN_LOGO_BASE}/min.png",
+    "Houston Astros": f"{_ESPN_LOGO_BASE}/hou.png",
+    "Los Angeles Angels": f"{_ESPN_LOGO_BASE}/laa.png",
+    "Athletics": f"{_ESPN_LOGO_BASE}/oak.png",
+    "Seattle Mariners": f"{_ESPN_LOGO_BASE}/sea.png",
+    "Texas Rangers": f"{_ESPN_LOGO_BASE}/tex.png",
+    "Atlanta Braves": f"{_ESPN_LOGO_BASE}/atl.png",
+    "Miami Marlins": f"{_ESPN_LOGO_BASE}/mia.png",
+    "New York Mets": f"{_ESPN_LOGO_BASE}/nym.png",
+    "Philadelphia Phillies": f"{_ESPN_LOGO_BASE}/phi.png",
+    "Washington Nationals": f"{_ESPN_LOGO_BASE}/wsh.png",
+    "Chicago Cubs": f"{_ESPN_LOGO_BASE}/chc.png",
+    "Cincinnati Reds": f"{_ESPN_LOGO_BASE}/cin.png",
+    "Milwaukee Brewers": f"{_ESPN_LOGO_BASE}/mil.png",
+    "Pittsburgh Pirates": f"{_ESPN_LOGO_BASE}/pit.png",
+    "St. Louis Cardinals": f"{_ESPN_LOGO_BASE}/stl.png",
+    "Arizona Diamondbacks": f"{_ESPN_LOGO_BASE}/ari.png",
+    "Colorado Rockies": f"{_ESPN_LOGO_BASE}/col.png",
+    "Los Angeles Dodgers": f"{_ESPN_LOGO_BASE}/lad.png",
+    "San Diego Padres": f"{_ESPN_LOGO_BASE}/sd.png",
+    "San Francisco Giants": f"{_ESPN_LOGO_BASE}/sf.png",
+}
+
+# Aliases de abreviaturas para logos
+for abbr_key, full_n in MLB_TEAMS.items():
+    if full_n in TEAM_LOGOS:
+        TEAM_LOGOS[abbr_key] = TEAM_LOGOS[full_n]
+
+
+def get_team_logo(team_name_or_abbr: str | None) -> str:
+    """Devuelve la URL del logo oficial para un equipo, o un logo genérico de MLB."""
+    if not team_name_or_abbr:
+        return f"{_ESPN_LOGO_BASE}/mlb.png"
+    s = str(team_name_or_abbr).strip()
+    if s in TEAM_LOGOS:
+        return TEAM_LOGOS[s]
+    resolved = resolve_team_full_name(s)
+    if resolved in TEAM_LOGOS:
+        return TEAM_LOGOS[resolved]
+    # Buscar por coincidencia parcial
+    for team_full, logo_url in TEAM_LOGOS.items():
+        if team_full.lower() in s.lower() or s.lower() in team_full.lower():
+            return logo_url
+    return "https://www.mlbstatic.com/team-logos/league-on-dark/1.svg"
+
 # ── Factores de Parque aproximados (100 = Neutral, >100 = Bateador, <100 = Pitcher) ─
 PARK_FACTORS: dict[str, float] = {
     "COL": 112, "CIN": 107, "BOS": 105, "PHI": 104, "LAA": 103,

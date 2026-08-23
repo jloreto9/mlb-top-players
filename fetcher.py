@@ -19,7 +19,7 @@ from typing import Any
 import pandas as pd
 import requests
 
-from constants import TEAM_LEAGUE, MLB_TEAMS, resolve_team_league
+from constants import TEAM_LEAGUE, MLB_TEAMS, resolve_team_league, get_team_logo
 from utils import clean_ascii_text
 
 CACHE_DIR = Path("cache")
@@ -685,9 +685,11 @@ def get_postseason_picture(tables: dict[str, pd.DataFrame]) -> dict[str, Any]:
         for i, row in df_div_lead.iterrows():
             seed_num = i + 1
             status = "🏆 Bye a Serie Divisional (ALDS/NLDS)" if seed_num <= 2 else "🏠 Sede de Wild Card Series (vs Seed 6)"
+            t_name = row["Team"]
             seeds.append({
+                "Logo": get_team_logo(t_name),
                 "Seed": f"Seed {seed_num}",
-                "Team": row["Team"],
+                "Team": t_name,
                 "Record": f"{row['W']}-{row['L']}",
                 "PCT": row["PCT"],
                 "Type": row["Type"],
@@ -700,9 +702,11 @@ def get_postseason_picture(tables: dict[str, pd.DataFrame]) -> dict[str, Any]:
             for i, row in df_wc_pool.head(3).iterrows():
                 seed_num = i + 4
                 status = "🏠 Sede de Wild Card Series (vs Seed 5)" if seed_num == 4 else ("✈️ Visita Wild Card Series (en Seed 4)" if seed_num == 5 else "✈️ Visita Wild Card Series (en Seed 3)")
+                t_name = row["Team"]
                 seeds.append({
+                    "Logo": get_team_logo(t_name),
                     "Seed": f"Seed {seed_num} (WC{i+1})",
-                    "Team": row["Team"],
+                    "Team": t_name,
                     "Record": f"{row['W']}-{row['L']}",
                     "PCT": row["PCT"],
                     "Type": "Wild Card",
@@ -712,21 +716,23 @@ def get_postseason_picture(tables: dict[str, pd.DataFrame]) -> dict[str, Any]:
 
         df_seeds = pd.DataFrame(seeds)
         df_hunt = df_wc_pool.iloc[3:7].copy().reset_index(drop=True) if len(df_wc_pool) > 3 else pd.DataFrame()
+        if not df_hunt.empty:
+            df_hunt["Logo"] = df_hunt["Team"].apply(get_team_logo)
 
         # Bracket de cruces
         bracket = {}
         if len(seeds) >= 6:
             bracket = {
-                "bye_1": {"seed": "Seed 1", "team": seeds[0]["Team"], "record": seeds[0]["Record"]},
-                "bye_2": {"seed": "Seed 2", "team": seeds[1]["Team"], "record": seeds[1]["Record"]},
+                "bye_1": {"seed": "Seed 1", "team": seeds[0]["Team"], "record": seeds[0]["Record"], "logo": seeds[0]["Logo"]},
+                "bye_2": {"seed": "Seed 2", "team": seeds[1]["Team"], "record": seeds[1]["Record"], "logo": seeds[1]["Logo"]},
                 "wc_matchup_1": {
-                    "home": {"seed": "Seed 3", "team": seeds[2]["Team"], "record": seeds[2]["Record"]},
-                    "away": {"seed": "Seed 6", "team": seeds[5]["Team"], "record": seeds[5]["Record"]},
+                    "home": {"seed": "Seed 3", "team": seeds[2]["Team"], "record": seeds[2]["Record"], "logo": seeds[2]["Logo"]},
+                    "away": {"seed": "Seed 6", "team": seeds[5]["Team"], "record": seeds[5]["Record"], "logo": seeds[5]["Logo"]},
                     "winner_faces": f"Seed 2 ({seeds[1]['Team']})",
                 },
                 "wc_matchup_2": {
-                    "home": {"seed": "Seed 4", "team": seeds[3]["Team"], "record": seeds[3]["Record"]},
-                    "away": {"seed": "Seed 5", "team": seeds[4]["Team"], "record": seeds[4]["Record"]},
+                    "home": {"seed": "Seed 4", "team": seeds[3]["Team"], "record": seeds[3]["Record"], "logo": seeds[3]["Logo"]},
+                    "away": {"seed": "Seed 5", "team": seeds[4]["Team"], "record": seeds[4]["Record"], "logo": seeds[4]["Logo"]},
                     "winner_faces": f"Seed 1 ({seeds[0]['Team']})",
                 },
             }

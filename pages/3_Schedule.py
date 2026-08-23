@@ -14,7 +14,7 @@ import streamlit as st
 import pandas as pd
 
 import fetcher
-from constants import MLB_TEAMS, AVAILABLE_SEASONS
+from constants import MLB_TEAMS, AVAILABLE_SEASONS, get_team_logo
 
 st.set_page_config(
     page_title="Schedule · MLB Stats",
@@ -74,7 +74,21 @@ df = st.session_state.sched_df.copy()
 team = st.session_state.sched_team
 yr = st.session_state.sched_year
 
-st.subheader(f"🏟️ {MLB_TEAMS.get(team, team)} ({team}) — Temporada {yr}")
+team_full = MLB_TEAMS.get(team, team)
+team_logo = get_team_logo(team_full)
+
+st.markdown(
+    f"""
+    <div style="display:flex; align-items:center; background-color:#0f172a; padding:15px 20px; border-radius:12px; margin-bottom:20px; border-left: 6px solid #3b82f6;">
+        <img src="{team_logo}" width="64" height="64" style="margin-right:20px; object-fit:contain;"/>
+        <div>
+            <h2 style="margin:0; padding:0; color:#f8fafc; font-size:1.6rem;">{team_full} ({team})</h2>
+            <span style="color:#94a3b8; font-size:0.95rem;">Temporada <b>{yr}</b> · Calendario oficial y resultados</span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # ── Split pasados / futuros ─────────────────────────────────────────────────
 played = df[df["Res"].isin(["W", "L", "T"])].copy()
@@ -97,17 +111,14 @@ if not played.empty:
 
 st.divider()
 
-# ── Columnas de display ────────────────────────────────────────────────────
-PLAYED_COLS = ["Date", "Home_Away", "Opp", "Res", "R", "RA", "Pitcher_W", "Pitcher_L", "Save", "Status"]
-UPCOMING_COLS = ["Date", "Home_Away", "Opp", "SP_Opp", "Status"]
+# Configuración de logo
+SCHED_LOGO_CONFIG = {
+    "Logo": st.column_config.ImageColumn("Logo", width="small"),
+}
 
-def _color_row(row):
-    res = str(row.get("Res", ""))
-    if res.startswith("W"):
-        return ["background-color: #1a3a1a; color: #7dff7d"] * len(row)
-    elif res.startswith("L"):
-        return ["background-color: #3a1a1a; color: #ff7d7d"] * len(row)
-    return [""] * len(row)
+# ── Columnas de display ────────────────────────────────────────────────────
+PLAYED_COLS = ["Logo", "Date", "Home_Away", "Opp", "Res", "R", "RA", "Pitcher_W", "Pitcher_L", "Save", "Status"]
+UPCOMING_COLS = ["Logo", "Date", "Home_Away", "Opp", "SP_Opp", "Status"]
 
 # ── Tabs: Jugados | Próximos ───────────────────────────────────────────────
 played_tab, upcoming_tab = st.tabs([
@@ -119,18 +130,22 @@ with played_tab:
     if played.empty:
         st.info("Aún no hay juegos completados en esta temporada.")
     else:
-        disp_p = played[[c for c in PLAYED_COLS if c in played.columns]].reset_index(drop=True)
-        # Mostrar los más recientes primero
+        played_disp = played.copy()
+        if "Opp" in played_disp.columns:
+            played_disp["Logo"] = played_disp["Opp"].apply(get_team_logo)
+        disp_p = played_disp[[c for c in PLAYED_COLS if c in played_disp.columns]].reset_index(drop=True)
         disp_p_rev = disp_p.iloc[::-1].reset_index(drop=True)
         disp_p_rev.index += 1
-        styled = disp_p_rev.style.apply(_color_row, axis=1)
-        st.dataframe(styled, use_container_width=True, height=600)
+        st.dataframe(disp_p_rev, column_config=SCHED_LOGO_CONFIG, use_container_width=True, height=600)
 
 with upcoming_tab:
     if upcoming.empty:
         st.success("Temporada finalizada — No quedan juegos por disputar.")
     else:
-        disp_u = upcoming[[c for c in UPCOMING_COLS if c in upcoming.columns]].reset_index(drop=True)
+        upcoming_disp = upcoming.copy()
+        if "Opp" in upcoming_disp.columns:
+            upcoming_disp["Logo"] = upcoming_disp["Opp"].apply(get_team_logo)
+        disp_u = upcoming_disp[[c for c in UPCOMING_COLS if c in upcoming_disp.columns]].reset_index(drop=True)
         disp_u.index += 1
-        st.dataframe(disp_u, use_container_width=True, height=600)
+        st.dataframe(disp_u, column_config=SCHED_LOGO_CONFIG, use_container_width=True, height=600)
 

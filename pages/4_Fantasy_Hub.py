@@ -22,7 +22,7 @@ import fetcher
 import fantasy
 from constants import (
     MLB_TEAMS, PARK_FACTORS, FANTASY_SCORING_PRESETS,
-    STATCAST_BAT_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER, AVAILABLE_SEASONS
+    STATCAST_BAT_COLS, STATCAST_PIT_COLS, LOWER_IS_BETTER, AVAILABLE_SEASONS, get_team_logo
 )
 from utils import format_display
 
@@ -237,8 +237,12 @@ with tab_bullpen:
             placeholder="Todos los equipos",
         )
 
-        f_bp = bp_df[bp_df["Team"].isin(tm_sel)] if tm_sel else bp_df
-        st.dataframe(format_display(f_bp), use_container_width=True, height=600, hide_index=True)
+        f_bp = bp_df[bp_df["Team"].isin(tm_sel)] if tm_sel else bp_df.copy()
+        if "Logo" not in f_bp.columns and "Team" in f_bp.columns:
+            f_bp.insert(0, "Logo", f_bp["Team"].apply(get_team_logo))
+        
+        bp_logo_config = {"Logo": st.column_config.ImageColumn("Logo", width="small")}
+        st.dataframe(format_display(f_bp), column_config=bp_logo_config, use_container_width=True, height=600, hide_index=True)
         st.download_button("📥 Descargar Jerarquías de Bullpen (CSV)", data=f_bp.to_csv(index=False).encode('utf-8'), file_name=f"bullpen_depth_chart_{year}.csv", mime="text/csv")
     else:
         st.info("Sin datos suficientes de bullpen.")
