@@ -1,8 +1,18 @@
 # ⚾ MLB Intelligence & Fantasy Baseball Suite
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://mlb-top-players-weekly.streamlit.app/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.35+-FF4B4B.svg?style=flat&logo=streamlit)](https://mlb-top-players-weekly.streamlit.app/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB.svg?style=flat&logo=python)](https://python.org)
+[![Plotly](https://img.shields.io/badge/Plotly-5.20+-3F4F75.svg?style=flat&logo=plotly)](https://plotly.com/)
+[![MLB Stats API](https://img.shields.io/badge/Data-MLB_Stats_API_%26_FanGraphs-002D72.svg?style=flat)](https://statsapi.mlb.com/)
+
+🔗 **App en vivo:** [mlb-top-players-weekly.streamlit.app](https://mlb-top-players-weekly.streamlit.app/)
+
 Aplicación analítica integral en **Streamlit** para análisis avanzado de Grandes Ligas (MLB) y toma de decisiones estratégicas en **Fantasy Baseball** (Yahoo, ESPN, Fantrax, CBS, NFBC).
 
 Combina la **MLB Stats API oficial** (`statsapi.mlb.com`), métricas sabermétricas de **FanGraphs** y datos de calidad de contacto de **Statcast**.
+
+Desarrollada por **Jorge Leonardo Loreto** (*Economista & AI Data Scientist*).
 
 ---
 
