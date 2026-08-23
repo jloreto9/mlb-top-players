@@ -73,41 +73,68 @@ def _fg_fetch(params: dict) -> pd.DataFrame:
 
 # ── Posiciones de Jugadores (MLB Stats API) ──────────────────────────────────
 
-def get_player_positions(year: int = _NOW_YEAR, force: bool = False) -> dict[str, str]:
+def get_player_metadata(year: int = _NOW_YEAR, force: bool = False) -> tuple[dict[str, str], dict[str, str]]:
     """
-    Retorna diccionario {Player_Name: Primary_Position} (ej: 'Aaron Judge': 'OF').
+    Retorna dos diccionarios:
+    1. {Player_Name: Primary_Position} (ej: 'Aaron Judge': 'RF')
+    2. {Player_Name: Official_Team_Name} (ej: 'Aaron Judge': 'New York Yankees', 'Pete Alonso': 'New York Mets')
     Usa la API oficial de MLB y cachea en JSON.
     """
-    cache_path = _path(f"positions_{year}", ext="json")
+    cache_path = _path(f"player_meta_{year}", ext="json")
     ttl = 12.0 if year >= _NOW_YEAR else 24.0 * 365
 
     if not force and not _expired(cache_path, ttl):
         try:
             with open(cache_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                return data.get("positions", {}), data.get("teams", {})
         except Exception:
             pass
 
     try:
+        teams_resp = requests.get(f"{_MLB_API_BASE}/teams?sportId=1", timeout=20)
+        teams_list = teams_resp.json().get("teams", []) if teams_resp.status_code == 200 else []
+        team_id_to_name = {t["id"]: t["name"] for t in teams_list}
+
         url = f"{_MLB_API_BASE}/sports/1/players?season={year}"
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
         people = resp.json().get("people", [])
-        
+
         pos_map = {}
+        team_map = {}
         for p in people:
-            name = p.get("fullName")
+            raw_name = p.get("fullName")
+            if not raw_name:
+                continue
+            name = clean_ascii_text(raw_name)
             pos = p.get("primaryPosition", {}).get("abbreviation", "DH")
-            if name:
-                pos_map[name] = pos
+            pos_map[name] = pos
+            pos_map[raw_name] = pos
+
+            tid = p.get("currentTeam", {}).get("id")
+            if tid in team_id_to_name:
+                tname = team_id_to_name[tid]
+                team_map[name] = tname
+                team_map[raw_name] = tname
 
         with open(cache_path, "w", encoding="utf-8") as f:
-            json.dump(pos_map, f, ensure_ascii=False)
+            json.dump({"positions": pos_map, "teams": team_map}, f, ensure_ascii=False)
 
-        return pos_map
+        return pos_map, team_map
     except Exception as e:
-        print(f"[fetcher] Error obteniendo posiciones MLB: {e}")
-        return {}
+        print(f"[fetcher] Error obteniendo metadata de jugadores MLB: {e}")
+        return {}, {}
+
+
+def get_player_positions(year: int = _NOW_YEAR, force: bool = False) -> dict[str, str]:
+    """Retorna diccionario {Player_Name: Primary_Position} (ej: 'Aaron Judge': 'OF')."""
+    return get_player_metadata(year, force)[0]
+
+
+def get_player_teams(year: int = _NOW_YEAR, force: bool = False) -> dict[str, str]:
+    """Retorna diccionario {Player_Name: Official_Team_Name} (ej: 'Aaron Judge': 'New York Yankees')."""
+    return get_player_metadata(year, force)[1]
 
 
 # ── Statcast Expected Stats & Quality of Contact (Baseball Savant) ───────────
@@ -323,11 +350,14 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
 
     # Enriquecer con posiciones de campo MLB y liga
     df["Name"] = df["Name"].apply(clean_ascii_text)
-    df["Team"] = df["Team"].apply(clean_ascii_text)
-    pos_map = get_player_positions(year)
+    pos_map, team_map = get_player_metadata(year)
+    df["Team_Exact"] = df["Name"].map(team_map)
+    df["Team"] = df["Team_Exact"].combine_first(df.get("Team", df.get("Tm", ""))).apply(clean_ascii_text)
+    df = df.drop(columns=["Team_Exact"], errors="ignore")
+
     if "Pos" in df.columns and pd.to_numeric(df["Pos"], errors="coerce").notna().any():
         df["Pos_WAR"] = df["Pos"]
-    df["Pos"] = df["Name"].map(pos_map).fillna("UT")
+    df["Pos"] = df["Name"].map(pos_map).fillna(df.get("Pos", "UT"))
 
     df["League"] = df["Team"].apply(resolve_team_league)
 
@@ -411,13 +441,17 @@ def pitching(year: int, force: bool = False) -> pd.DataFrame:
 
     # Enriquecer rol SP/RP y liga
     df["Name"] = df["Name"].apply(clean_ascii_text)
-    df["Team"] = df["Team"].apply(clean_ascii_text)
+    pos_map, team_map = get_player_metadata(year)
+    df["Team_Exact"] = df["Name"].map(team_map)
+    df["Team"] = df["Team_Exact"].combine_first(df.get("Team", df.get("Tm", ""))).apply(clean_ascii_text)
+    df = df.drop(columns=["Team_Exact"], errors="ignore")
+
     if "GS" in df.columns and "G" in df.columns:
         gs = pd.to_numeric(df["GS"], errors="coerce").fillna(0)
         g = pd.to_numeric(df["G"], errors="coerce").fillna(1)
         df["Pos"] = (gs >= (g * 0.5)).map({True: "SP", False: "RP"})
     else:
-        df["Pos"] = "P"
+        df["Pos"] = df["Name"].map(pos_map).fillna("P")
 
     df["League"] = df["Team"].apply(resolve_team_league)
 

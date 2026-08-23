@@ -30,10 +30,10 @@ def refresh(year: int) -> None:
 
     # 1. Metadatos oficiales de MLB
     try:
-        pos = fetcher.get_player_positions(year, force=True)
-        print(f"  [OK] player_positions: {len(pos):,} jugadores")
+        pos, teams = fetcher.get_player_metadata(year, force=True)
+        print(f"  [OK] player_metadata: {len(pos):,} posiciones, {len(teams):,} equipos exactos")
     except Exception as e:
-        print(f"  [WARN] player_positions: {e} (omitido)", file=sys.stderr)
+        print(f"  [WARN] player_metadata: {e} (omitido)", file=sys.stderr)
 
     try:
         std = fetcher.get_standings(year, force=True)

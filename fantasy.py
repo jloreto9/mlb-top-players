@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from constants import FANTASY_SCORING_PRESETS, PARK_FACTORS, LOWER_IS_BETTER
+from constants import FANTASY_SCORING_PRESETS, PARK_FACTORS, LOWER_IS_BETTER, resolve_team_full_name, MLB_TEAMS
 
 def calculate_batting_fantasy(df: pd.DataFrame, scoring_preset: str = 'ESPN Standard', min_pa: int = 50) -> pd.DataFrame:
     if df.empty:
@@ -273,6 +273,8 @@ def get_bullpen_depth_chart(df_pit: pd.DataFrame) -> pd.DataFrame:
     elif 'Team' not in out.columns:
         out['Team'] = 'UNK'
 
+    out['Team'] = out['Team'].apply(resolve_team_full_name)
+
     for c in ['SV', 'HLD', 'BS', 'ERA', 'WHIP', 'K%', 'BB%', 'Stuff+', 'IP', 'G', 'GS']:
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors='coerce')
@@ -284,7 +286,10 @@ def get_bullpen_depth_chart(df_pit: pd.DataFrame) -> pd.DataFrame:
         rp_df = out.copy()
 
     bullpen_rows = []
-    teams = rp_df['Team'].dropna().unique()
+    valid_franchises = set(MLB_TEAMS.values())
+    teams = [t for t in rp_df['Team'].dropna().unique() if t in valid_franchises]
+    if len(teams) < 20:
+        teams = [t for t in rp_df['Team'].dropna().unique() if t and t not in ('UNK', 'New York', 'Chicago', 'Los Angeles', 'TOT', 'MLB')]
     for tm in sorted(teams):
         tm_rps = rp_df[rp_df['Team'] == tm].copy()
         if tm_rps.empty:

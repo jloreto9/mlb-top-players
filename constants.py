@@ -96,7 +96,7 @@ MLB_TEAMS: dict[str, str] = {
     "MIN": "Minnesota Twins",
     "HOU": "Houston Astros",
     "LAA": "Los Angeles Angels",
-    "OAK": "Oakland Athletics",
+    "OAK": "Athletics",
     "ATH": "Athletics",
     "SEA": "Seattle Mariners",
     "TEX": "Texas Rangers",
@@ -121,6 +121,60 @@ MLB_TEAMS: dict[str, str] = {
     "SF":  "San Francisco Giants",
     "SFG": "San Francisco Giants",
 }
+
+OFFICIAL_FRANCHISE_MAP: dict[str, str] = {
+    "BALTIMORE": "Baltimore Orioles", "BALTIMORE ORIOLES": "Baltimore Orioles", "ORIOLES": "Baltimore Orioles",
+    "BOSTON": "Boston Red Sox", "BOSTON RED SOX": "Boston Red Sox", "RED SOX": "Boston Red Sox",
+    "NEW YORK YANKEES": "New York Yankees", "YANKEES": "New York Yankees", "NY YANKEES": "New York Yankees",
+    "TAMPA BAY": "Tampa Bay Rays", "TAMPA BAY RAYS": "Tampa Bay Rays", "RAYS": "Tampa Bay Rays",
+    "TORONTO": "Toronto Blue Jays", "TORONTO BLUE JAYS": "Toronto Blue Jays", "BLUE JAYS": "Toronto Blue Jays",
+    "CHICAGO WHITE SOX": "Chicago White Sox", "WHITE SOX": "Chicago White Sox", "CHI WHITE SOX": "Chicago White Sox",
+    "CLEVELAND": "Cleveland Guardians", "CLEVELAND GUARDIANS": "Cleveland Guardians", "GUARDIANS": "Cleveland Guardians", "CLEVELAND INDIANS": "Cleveland Guardians",
+    "DETROIT": "Detroit Tigers", "DETROIT TIGERS": "Detroit Tigers", "TIGERS": "Detroit Tigers",
+    "KANSAS CITY": "Kansas City Royals", "KANSAS CITY ROYALS": "Kansas City Royals", "ROYALS": "Kansas City Royals",
+    "MINNESOTA": "Minnesota Twins", "MINNESOTA TWINS": "Minnesota Twins", "TWINS": "Minnesota Twins",
+    "HOUSTON": "Houston Astros", "HOUSTON ASTROS": "Houston Astros", "ASTROS": "Houston Astros",
+    "LOS ANGELES ANGELS": "Los Angeles Angels", "ANGELS": "Los Angeles Angels", "LA ANGELS": "Los Angeles Angels", "ANAHEIM": "Los Angeles Angels",
+    "ATHLETICS": "Athletics", "OAKLAND": "Athletics", "OAKLAND ATHLETICS": "Athletics", "SACRAMENTO": "Athletics", "A'S": "Athletics",
+    "SEATTLE": "Seattle Mariners", "SEATTLE MARINERS": "Seattle Mariners", "MARINERS": "Seattle Mariners",
+    "TEXAS": "Texas Rangers", "TEXAS RANGERS": "Texas Rangers", "RANGERS": "Texas Rangers",
+    "ATLANTA": "Atlanta Braves", "ATLANTA BRAVES": "Atlanta Braves", "BRAVES": "Atlanta Braves",
+    "MIAMI": "Miami Marlins", "MIAMI MARLINS": "Miami Marlins", "MARLINS": "Miami Marlins", "FLORIDA": "Miami Marlins",
+    "NEW YORK METS": "New York Mets", "METS": "New York Mets", "NY METS": "New York Mets",
+    "PHILADELPHIA": "Philadelphia Phillies", "PHILADELPHIA PHILLIES": "Philadelphia Phillies", "PHILLIES": "Philadelphia Phillies",
+    "WASHINGTON": "Washington Nationals", "WASHINGTON NATIONALS": "Washington Nationals", "NATIONALS": "Washington Nationals",
+    "CHICAGO CUBS": "Chicago Cubs", "CUBS": "Chicago Cubs", "CHI CUBS": "Chicago Cubs",
+    "CINCINNATI": "Cincinnati Reds", "CINCINNATI REDS": "Cincinnati Reds", "REDS": "Cincinnati Reds",
+    "MILWAUKEE": "Milwaukee Brewers", "MILWAUKEE BREWERS": "Milwaukee Brewers", "BREWERS": "Milwaukee Brewers",
+    "PITTSBURGH": "Pittsburgh Pirates", "PITTSBURGH PIRATES": "Pittsburgh Pirates", "PIRATES": "Pittsburgh Pirates",
+    "ST. LOUIS": "St. Louis Cardinals", "ST. LOUIS CARDINALS": "St. Louis Cardinals", "CARDINALS": "St. Louis Cardinals",
+    "ARIZONA": "Arizona Diamondbacks", "ARIZONA DIAMONDBACKS": "Arizona Diamondbacks", "DIAMONDBACKS": "Arizona Diamondbacks", "D-BACKS": "Arizona Diamondbacks",
+    "COLORADO": "Colorado Rockies", "COLORADO ROCKIES": "Colorado Rockies", "ROCKIES": "Colorado Rockies",
+    "LOS ANGELES DODGERS": "Los Angeles Dodgers", "DODGERS": "Los Angeles Dodgers", "LA DODGERS": "Los Angeles Dodgers",
+    "SAN DIEGO": "San Diego Padres", "SAN DIEGO PADRES": "San Diego Padres", "PADRES": "San Diego Padres",
+    "SAN FRANCISCO": "San Francisco Giants", "SAN FRANCISCO GIANTS": "San Francisco Giants", "GIANTS": "San Francisco Giants",
+}
+
+
+def resolve_team_full_name(team_str: str | None) -> str:
+    """Normaliza un equipo a su nombre canónico oficial de MLB (ej: 'NYY' -> 'New York Yankees')."""
+    if team_str is None:
+        return ""
+    s = str(team_str).strip()
+    if not s or s.lower() in ("nan", "none", "unk", "tot"):
+        return ""
+    # Si viene con comas (traspasado), tomar el último equipo
+    if "," in s:
+        s = s.split(",")[-1].strip()
+    u = s.upper()
+    if u in MLB_TEAMS:
+        return MLB_TEAMS[u]
+    if u in OFFICIAL_FRANCHISE_MAP:
+        return OFFICIAL_FRANCHISE_MAP[u]
+    for k, v in OFFICIAL_FRANCHISE_MAP.items():
+        if k in u:
+            return v
+    return s
 
 # ── Factores de Parque aproximados (100 = Neutral, >100 = Bateador, <100 = Pitcher) ─
 PARK_FACTORS: dict[str, float] = {
