@@ -539,7 +539,7 @@ def team_field(year: int, force: bool = False) -> pd.DataFrame:
 
 def get_standings(year: int, force: bool = False) -> dict[str, pd.DataFrame]:
     """
-    Retorna diccionario con DataFrames de Standings por división y Wild Card.
+    Retorna diccionario con DataFrames de Standings por división y Wild Card con Magic Numbers y Postseason status.
     Estructura: {'AL East': df, 'AL Central': df, ..., 'AL Wild Card': df, 'NL Wild Card': df}
     """
     cache_path = _path(f"standings_mlb_{year}", ext="json")
@@ -561,13 +561,17 @@ def get_standings(year: int, force: bool = False) -> dict[str, pd.DataFrame]:
 
         results = {}
         for rec in records:
-            div_info = rec.get("division", {})
-            div_id = div_info.get("id")
-            div_name, lg = DIVISION_NAMES.get(div_id, (div_info.get("name", "Division"), "MLB"))
+            div_id = rec.get("division", {}).get("id")
+            div_name, lg = DIVISION_NAMES.get(div_id, ("Division", "MLB"))
 
             rows = []
-            for tr in rec.get("teamRecords", []):
-                t_name = tr.get("team", {}).get("name", "")
+            team_records = rec.get("teamRecords", [])
+            leader_w = team_records[0].get("wins", 0) if team_records else 0
+            second_l = team_records[1].get("losses", 0) if len(team_records) > 1 else 0
+
+            for idx, tr in enumerate(team_records):
+                raw_name = tr.get("team", {}).get("name", "")
+                t_name = clean_ascii_text(raw_name)
                 t_abbr = tr.get("team", {}).get("abbreviation", "")
                 w = tr.get("wins", 0)
                 l = tr.get("losses", 0)
@@ -578,7 +582,27 @@ def get_standings(year: int, force: bool = False) -> dict[str, pd.DataFrame]:
                 ra = tr.get("runsAllowed", 0)
                 diff = tr.get("runDifferential", 0)
                 streak = tr.get("streak", {}).get("streakCode", "")
+                clinch = tr.get("clinchIndicator", "")
                 
+                # Magic Number y Elimination Number
+                api_mn = str(tr.get("magicNumber", "")).strip()
+                api_e = str(tr.get("eliminationNumber", "")).strip()
+
+                if idx == 0:
+                    if api_mn and api_mn != "-":
+                        mn = api_mn
+                    else:
+                        calc_mn = max(0, 163 - w - second_l)
+                        mn = str(calc_mn) if calc_mn > 0 else "Clinched"
+                    e_num = "-"
+                else:
+                    mn = "-"
+                    if api_e and api_e != "-":
+                        e_num = api_e
+                    else:
+                        calc_e = max(0, 163 - leader_w - l)
+                        e_num = str(calc_e) if calc_e > 0 else "Eliminado"
+
                 # Split records para L10
                 l10 = ""
                 for split in tr.get("records", {}).get("splitRecords", []):
@@ -593,11 +617,16 @@ def get_standings(year: int, force: bool = False) -> dict[str, pd.DataFrame]:
                     "PCT": pct,
                     "GB": gb,
                     "WC_GB": wc_gb,
+                    "Magic_Number": mn,
+                    "Elim_Number": e_num,
+                    "Clinch": clinch,
                     "RS": rs,
                     "RA": ra,
                     "Diff": diff,
                     "Streak": streak,
                     "L10": l10,
+                    "League": lg,
+                    "Division": div_name,
                 })
 
             df_div = pd.DataFrame(rows)
@@ -612,6 +641,101 @@ def get_standings(year: int, force: bool = False) -> dict[str, pd.DataFrame]:
     except Exception as e:
         print(f"[fetcher] Error descargando standings MLB: {e}")
         return {}
+
+
+def get_postseason_picture(tables: dict[str, pd.DataFrame]) -> dict[str, Any]:
+    """
+    Calcula los 6 clasificados (Seeds 1 al 6), los Byes, los enfrentamientos de Wild Card
+    y los equipos 'In the Hunt' para la Liga Americana y la Liga Nacional.
+    """
+    out = {
+        "AL": {"seeds": pd.DataFrame(), "hunt": pd.DataFrame(), "bracket": {}},
+        "NL": {"seeds": pd.DataFrame(), "hunt": pd.DataFrame(), "bracket": {}},
+    }
+    if not tables:
+        return out
+
+    for lg, div_list in [("AL", ["AL East", "AL Central", "AL West"]), ("NL", ["NL East", "NL Central", "NL West"])]:
+        div_leaders = []
+        wildcard_pool = []
+
+        for d_name in div_list:
+            df_d = tables.get(d_name, pd.DataFrame())
+            if df_d.empty:
+                continue
+            df_d_sorted = df_d.sort_values(by=["W", "Diff"], ascending=[False, False]).reset_index(drop=True)
+            leader = df_d_sorted.iloc[0].to_dict()
+            leader["Type"] = f"Campeón {d_name}"
+            div_leaders.append(leader)
+
+            if len(df_d_sorted) > 1:
+                for _, r in df_d_sorted.iloc[1:].iterrows():
+                    wc_item = r.to_dict()
+                    wc_item["Type"] = "Wild Card"
+                    wildcard_pool.append(wc_item)
+
+        if not div_leaders:
+            continue
+
+        df_div_lead = pd.DataFrame(div_leaders).sort_values(by=["W", "Diff"], ascending=[False, False]).reset_index(drop=True)
+        df_wc_pool = pd.DataFrame(wildcard_pool).sort_values(by=["W", "Diff"], ascending=[False, False]).reset_index(drop=True) if wildcard_pool else pd.DataFrame()
+
+        seeds = []
+        # Seeds 1, 2, 3: Campeones divisionales
+        for i, row in df_div_lead.iterrows():
+            seed_num = i + 1
+            status = "🏆 Bye a Serie Divisional (ALDS/NLDS)" if seed_num <= 2 else "🏠 Sede de Wild Card Series (vs Seed 6)"
+            seeds.append({
+                "Seed": f"Seed {seed_num}",
+                "Team": row["Team"],
+                "Record": f"{row['W']}-{row['L']}",
+                "PCT": row["PCT"],
+                "Type": row["Type"],
+                "Status": status,
+                "Diff": row["Diff"],
+            })
+
+        # Seeds 4, 5, 6: Comodines
+        if not df_wc_pool.empty:
+            for i, row in df_wc_pool.head(3).iterrows():
+                seed_num = i + 4
+                status = "🏠 Sede de Wild Card Series (vs Seed 5)" if seed_num == 4 else ("✈️ Visita Wild Card Series (en Seed 4)" if seed_num == 5 else "✈️ Visita Wild Card Series (en Seed 3)")
+                seeds.append({
+                    "Seed": f"Seed {seed_num} (WC{i+1})",
+                    "Team": row["Team"],
+                    "Record": f"{row['W']}-{row['L']}",
+                    "PCT": row["PCT"],
+                    "Type": "Wild Card",
+                    "Status": status,
+                    "Diff": row["Diff"],
+                })
+
+        df_seeds = pd.DataFrame(seeds)
+        df_hunt = df_wc_pool.iloc[3:7].copy().reset_index(drop=True) if len(df_wc_pool) > 3 else pd.DataFrame()
+
+        # Bracket de cruces
+        bracket = {}
+        if len(seeds) >= 6:
+            bracket = {
+                "bye_1": {"seed": "Seed 1", "team": seeds[0]["Team"], "record": seeds[0]["Record"]},
+                "bye_2": {"seed": "Seed 2", "team": seeds[1]["Team"], "record": seeds[1]["Record"]},
+                "wc_matchup_1": {
+                    "home": {"seed": "Seed 3", "team": seeds[2]["Team"], "record": seeds[2]["Record"]},
+                    "away": {"seed": "Seed 6", "team": seeds[5]["Team"], "record": seeds[5]["Record"]},
+                    "winner_faces": f"Seed 2 ({seeds[1]['Team']})",
+                },
+                "wc_matchup_2": {
+                    "home": {"seed": "Seed 4", "team": seeds[3]["Team"], "record": seeds[3]["Record"]},
+                    "away": {"seed": "Seed 5", "team": seeds[4]["Team"], "record": seeds[4]["Record"]},
+                    "winner_faces": f"Seed 1 ({seeds[0]['Team']})",
+                },
+            }
+
+        out[lg]["seeds"] = df_seeds
+        out[lg]["hunt"] = df_hunt
+        out[lg]["bracket"] = bracket
+
+    return out
 
 
 # ── Calendario & Matchups Semanales (MLB Stats API) ──────────────────────────
