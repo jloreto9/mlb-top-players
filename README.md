@@ -89,7 +89,7 @@ streamlit run app.py
 *Economista & AI Data Scientist — Especialista en Sabermetría y Modelado Analítico*
 
 - **GitHub:** [@jloreto9](https://github.com/jloreto9)
-- **Portafolio:** [jloreto9.github.io](https://jloreto9.github.io)
+- **Portafolio:** [jloreto9.github.io/jloreto9](https://jloreto9.github.io/jloreto9/)
 - **LinkedIn:** [linkedin.com/in/jloreto](https://www.linkedin.com/in/jloreto/)
 
 ---
