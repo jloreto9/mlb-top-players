@@ -136,22 +136,22 @@ def statcast_batting(year: int, force: bool = False) -> pd.DataFrame:
                 "est_ba": "xBA",
                 "est_slg": "xSLG",
                 "est_woba": "xwOBA",
+                "woba": "wOBA_Savant",
+                "ba": "BA_Savant",
+                "slg": "SLG_Savant",
             })
-            ba_col = "ba" if "ba" in df_exp.columns else "ba_sc"
-            if ba_col in df_exp.columns and "xBA" in df_exp.columns:
-                df_exp["diff_BA"] = (pd.to_numeric(df_exp[ba_col], errors="coerce") - pd.to_numeric(df_exp["xBA"], errors="coerce")).round(3)
+            if "BA_Savant" in df_exp.columns and "xBA" in df_exp.columns:
+                df_exp["diff_BA"] = (pd.to_numeric(df_exp["BA_Savant"], errors="coerce") - pd.to_numeric(df_exp["xBA"], errors="coerce")).round(3)
             elif "est_ba_minus_ba_diff" in df_exp.columns:
                 df_exp["diff_BA"] = pd.to_numeric(df_exp["est_ba_minus_ba_diff"], errors="coerce").round(3)
 
-            slg_col = "slg" if "slg" in df_exp.columns else "slg_sc"
-            if slg_col in df_exp.columns and "xSLG" in df_exp.columns:
-                df_exp["diff_SLG"] = (pd.to_numeric(df_exp[slg_col], errors="coerce") - pd.to_numeric(df_exp["xSLG"], errors="coerce")).round(3)
+            if "SLG_Savant" in df_exp.columns and "xSLG" in df_exp.columns:
+                df_exp["diff_SLG"] = (pd.to_numeric(df_exp["SLG_Savant"], errors="coerce") - pd.to_numeric(df_exp["xSLG"], errors="coerce")).round(3)
             elif "est_slg_minus_slg_diff" in df_exp.columns:
                 df_exp["diff_SLG"] = pd.to_numeric(df_exp["est_slg_minus_slg_diff"], errors="coerce").round(3)
 
-            woba_col = "woba" if "woba" in df_exp.columns else "woba_sc"
-            if woba_col in df_exp.columns and "xwOBA" in df_exp.columns:
-                df_exp["diff_wOBA"] = (pd.to_numeric(df_exp[woba_col], errors="coerce") - pd.to_numeric(df_exp["xwOBA"], errors="coerce")).round(3)
+            if "wOBA_Savant" in df_exp.columns and "xwOBA" in df_exp.columns:
+                df_exp["diff_wOBA"] = (pd.to_numeric(df_exp["wOBA_Savant"], errors="coerce") - pd.to_numeric(df_exp["xwOBA"], errors="coerce")).round(3)
             elif "est_woba_minus_woba_diff" in df_exp.columns:
                 df_exp["diff_wOBA"] = pd.to_numeric(df_exp["est_woba_minus_woba_diff"], errors="coerce").round(3)
 
@@ -294,7 +294,7 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
     try:
         sc_bat = statcast_batting(year)
         if sc_bat is not None and not sc_bat.empty:
-            merge_cols = [c for c in ["xBA", "xSLG", "xwOBA", "diff_wOBA", "diff_BA", "diff_SLG", "EV", "maxEV", "HardHit%", "Barrel%", "SweetSpot%"] if c in sc_bat.columns]
+            merge_cols = [c for c in ["xBA", "xSLG", "xwOBA", "diff_wOBA", "diff_BA", "diff_SLG", "wOBA_Savant", "EV", "maxEV", "HardHit%", "Barrel%", "SweetSpot%"] if c in sc_bat.columns]
             if "mlbID" in df.columns and "mlbID" in sc_bat.columns:
                 df["_join_id"] = pd.to_numeric(df["mlbID"], errors="coerce").fillna(-1).astype(int)
                 sc_bat["_join_id"] = pd.to_numeric(sc_bat["mlbID"], errors="coerce").fillna(-1).astype(int)
@@ -305,6 +305,10 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
                 cols_to_drop = [c for c in merge_cols if c in df.columns]
                 df_clean = df.drop(columns=cols_to_drop, errors="ignore")
                 df = pd.merge(df_clean, sc_bat[["Name_Savant"] + merge_cols].drop_duplicates("Name_Savant"), left_on="Name", right_on="Name_Savant", how="left").drop(columns=["Name_Savant"], errors="ignore")
+
+        if "wOBA_Savant" in df.columns:
+            df["wOBA"] = pd.to_numeric(df["wOBA_Savant"], errors="coerce").combine_first(pd.to_numeric(df.get("wOBA", 0.320), errors="coerce"))
+            df = df.drop(columns=["wOBA_Savant"], errors="ignore")
     except Exception as e:
         print(f"[fetcher] Aviso: no se pudo fusionar Statcast batting: {e}")
 
