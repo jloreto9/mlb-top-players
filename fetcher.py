@@ -20,6 +20,7 @@ import pandas as pd
 import requests
 
 from constants import TEAM_LEAGUE, MLB_TEAMS, resolve_team_league
+from utils import clean_ascii_text
 
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
@@ -157,7 +158,7 @@ def statcast_batting(year: int, force: bool = False) -> pd.DataFrame:
 
             if "last_name, first_name" in df_exp.columns:
                 df_exp["Name_Savant"] = df_exp["last_name, first_name"].apply(
-                    lambda n: " ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n)
+                    lambda n: clean_ascii_text(" ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n))
                 )
 
         if df_ev is not None and not df_ev.empty:
@@ -213,7 +214,7 @@ def statcast_pitching(year: int, force: bool = False) -> pd.DataFrame:
             })
             if "last_name, first_name" in df_exp.columns:
                 df_exp["Name_Savant"] = df_exp["last_name, first_name"].apply(
-                    lambda n: " ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n)
+                    lambda n: clean_ascii_text(" ".join(reversed([p.strip() for p in n.split(",")])) if "," in str(n) else str(n))
                 )
 
         if df_ev is not None and not df_ev.empty:
@@ -321,6 +322,8 @@ def batting(year: int, force: bool = False) -> pd.DataFrame:
         df["diff_wOBA"] = (pd.to_numeric(df["wOBA"], errors="coerce") - pd.to_numeric(df["xwOBA"], errors="coerce")).round(3)
 
     # Enriquecer con posiciones de campo MLB y liga
+    df["Name"] = df["Name"].apply(clean_ascii_text)
+    df["Team"] = df["Team"].apply(clean_ascii_text)
     pos_map = get_player_positions(year)
     if "Pos" in df.columns and pd.to_numeric(df["Pos"], errors="coerce").notna().any():
         df["Pos_WAR"] = df["Pos"]
@@ -407,6 +410,8 @@ def pitching(year: int, force: bool = False) -> pd.DataFrame:
         df["diff_ERA"] = (pd.to_numeric(df["ERA"], errors="coerce") - pd.to_numeric(df["xERA"], errors="coerce")).round(2)
 
     # Enriquecer rol SP/RP y liga
+    df["Name"] = df["Name"].apply(clean_ascii_text)
+    df["Team"] = df["Team"].apply(clean_ascii_text)
     if "GS" in df.columns and "G" in df.columns:
         gs = pd.to_numeric(df["GS"], errors="coerce").fillna(0)
         g = pd.to_numeric(df["G"], errors="coerce").fillna(1)

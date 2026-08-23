@@ -11,16 +11,22 @@ Reglas:
   Tasas 1d     (WAR, IP, K/9, EV…)    → X.X
 """
 
+import unicodedata
 import pandas as pd
 
 # ── Clasificación de columnas ──────────────────────────────────────────────
+
+TEXT_COLS = {
+    "Name", "Player", "Pitcher", "Batter", "Opponent", "Team", "Tm",
+    "Pos", "Verdict", "Two_Start", "Matchup", "Status", "Recommendation", "League"
+}
 
 SLASH_COLS = {"AVG", "OBP", "SLG", "OPS", "wOBA", "xwOBA", "xBA", "xSLG", "ISO", "BABIP"}
 
 PCT_COLS = {
     "BB%", "K%", "K-BB%", "LOB%", "CSW%",
     "HR/FB", "LD%", "GB%", "FB%", "IFFB%", "IFH%", "BUH%",
-    "Soft%", "Med%", "Hard%", "HardHit%", "Barrel%",
+    "Soft%", "Med%", "Hard%", "HardHit%", "Barrel%", "SweetSpot%",
     "Pull%", "Cent%", "Oppo%",
     "SwStr%", "CStr%", "Zone%", "FP%",
     "F-Strike%", "O-Swing%", "Z-Swing%", "Swing%",
@@ -49,7 +55,29 @@ RATE1_COLS = {"WAR", "IP", "K/9", "BB/9", "HR/9", "H/9", "RS/9", "EV", "maxEV", 
 RATE2_COLS = {"ERA", "xERA", "FIP", "xFIP", "SIERA", "botERA", "WHIP", "K/BB", "AVG_velo"}
 
 
-# ── Funciones de formato ───────────────────────────────────────────────────
+# ── Funciones de formato y limpieza ────────────────────────────────────────
+
+def clean_ascii_text(val) -> str:
+    """
+    Elimina acentos/tildes y normaliza caracteres a su equivalente ASCII base:
+    á->a, é->e, í->i, ó->o, ú->u, ñ->n, y limpia escapes como \\xc3\\xa1 o \\'.
+    """
+    if pd.isna(val) or val is None:
+        return ""
+    s = str(val).strip()
+    if "\\x" in s or "\\u" in s:
+        try:
+            s = s.encode("raw_unicode_escape").decode("unicode_escape").encode("latin1").decode("utf-8")
+        except Exception:
+            try:
+                s = s.encode("raw_unicode_escape").decode("utf-8")
+            except Exception:
+                pass
+    s = s.replace("\\'", "'").replace('\\"', '"')
+    s = s.replace("ñ", "n").replace("Ñ", "N")
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    return s
+
 
 def _fmt_slash(v) -> str:
     if pd.isna(v):
@@ -115,7 +143,7 @@ def _fmt_rate(v, d: int = 2) -> str:
 
 
 def format_display(df: pd.DataFrame) -> pd.DataFrame:
-    """Devuelve copia del DataFrame con columnas formateadas como strings estéticas."""
+    """Devuelve copia del DataFrame con columnas formateadas como strings estéticas y sin acentos."""
     out = df.copy().astype(object)
     for col in out.columns:
         if col in SLASH_COLS:
@@ -134,6 +162,8 @@ def format_display(df: pd.DataFrame) -> pd.DataFrame:
             out[col] = out[col].apply(lambda v: _fmt_rate(v, 1))
         elif col in RATE2_COLS:
             out[col] = out[col].apply(lambda v: _fmt_rate(v, 2))
+        elif col in TEXT_COLS or out[col].dtype == object:
+            out[col] = out[col].apply(clean_ascii_text)
     return out
 
 
