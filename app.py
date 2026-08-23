@@ -38,6 +38,13 @@ with st.sidebar:
     st.divider()
     run_btn = st.button("▶ Cargar datos", type="primary", use_container_width=True)
 
+    st.divider()
+    st.markdown(
+        "👨‍💻 **Desarrollado por Jorge Leonardo Loreto**  \n"
+        "*AI Data Scientist & Baseball Analytics*  \n"
+        "[GitHub](https://github.com/jloreto9) · [Portafolio](https://jloreto9.github.io)"
+    )
+
 # ── Session state ──────────────────────────────────────────────────────────
 for key in ("team_bat_df", "team_pit_df", "team_field_df", "loaded_year", "quick_bat", "quick_pit"):
     if key not in st.session_state:
@@ -247,4 +254,13 @@ with field_tab:
         st.warning("No se pudieron cargar los datos de fildeo.")
     else:
         _show_by_league(tfd, tfield_cols, "tfield")
+
+# ── Footer de autoría ──────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #64748B; font-size: 0.85rem;'>"
+    "⚾ <b>MLB Intelligence & Fantasy Suite</b> · Desarrollado por <b>Jorge Leonardo Loreto</b> · Economista & AI Data Scientist"
+    "</div>",
+    unsafe_allow_html=True
+)
 

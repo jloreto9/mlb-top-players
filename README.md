@@ -81,3 +81,20 @@ streamlit run app.py
 3. Conecta tu repositorio seleccionando `app.py` como **Main file**.
 4. ¡Listo! La suite se desplegará automáticamente.
 
+---
+
+## 👨‍💻 Autor
+
+**Jorge Leonardo Loreto**  
+*Economista & AI Data Scientist — Especialista en Sabermetría y Modelado Analítico*
+
+- **GitHub:** [@jloreto9](https://github.com/jloreto9)
+- **Portafolio:** [jloreto9.github.io](https://jloreto9.github.io)
+- **LinkedIn:** [linkedin.com/in/jloreto](https://www.linkedin.com/in/jloreto/)
+
+---
+
+## 📄 Licencia
+
+Este proyecto está bajo la Licencia MIT.
+
