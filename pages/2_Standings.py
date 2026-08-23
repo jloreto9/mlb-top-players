@@ -14,6 +14,8 @@ import pandas as pd
 import fetcher
 from constants import AVAILABLE_SEASONS
 
+_NOW_YEAR = datetime.now().year
+
 st.set_page_config(
     page_title="Standings & Playoffs · MLB Stats",
     page_icon="🏆",
